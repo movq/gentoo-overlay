@@ -1,0 +1,255 @@
+# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+
+CRATES="
+	aho-corasick@1.1.4
+	allocator-api2@0.2.21
+	anstream@0.6.21
+	anstyle-parse@0.2.7
+	anstyle-query@1.1.5
+	anstyle-wincon@3.0.11
+	anstyle@1.0.13
+	assert_matches@1.5.0
+	autocfg@1.5.0
+	bitflags@2.10.0
+	block-buffer@0.10.4
+	bstr@1.12.1
+	cc@1.2.55
+	cfg-if@1.0.4
+	cfg_aliases@0.2.1
+	clap@4.5.56
+	clap_builder@4.5.56
+	clap_derive@4.5.55
+	clap_lex@0.7.7
+	colorchoice@1.0.4
+	cpufeatures@0.2.17
+	crypto-common@0.1.7
+	digest@0.10.7
+	dirs-sys@0.5.0
+	dirs@6.0.0
+	either@1.15.0
+	equivalent@1.0.2
+	errno@0.3.14
+	fastrand@2.3.0
+	find-msvc-tools@0.1.9
+	foldhash@0.2.0
+	generic-array@0.14.7
+	getrandom@0.2.17
+	getrandom@0.3.4
+	globset@0.4.18
+	hashbrown@0.16.1
+	heck@0.5.0
+	is_terminal_polyfill@1.70.2
+	itertools@0.14.0
+	jobserver@0.1.34
+	libc@0.2.180
+	libredox@0.1.12
+	lock_api@0.4.14
+	log@0.4.29
+	lru@0.16.3
+	macro_rules_attribute-proc_macro@0.2.2
+	macro_rules_attribute@0.2.2
+	memchr@2.7.6
+	nix@0.31.1
+	num-traits@0.2.19
+	once_cell@1.21.3
+	once_cell_polyfill@1.70.2
+	option-ext@0.2.0
+	parking_lot@0.12.5
+	parking_lot_core@0.9.12
+	paste@1.0.15
+	phf@0.13.1
+	phf_codegen@0.13.1
+	phf_generator@0.13.1
+	phf_shared@0.13.1
+	pkg-config@0.3.32
+	portable-atomic@1.13.1
+	ppv-lite86@0.2.21
+	proc-macro2@1.0.106
+	quote@1.0.44
+	r-efi@5.3.0
+	rand@0.9.2
+	rand_chacha@0.9.0
+	rand_core@0.9.5
+	redox_syscall@0.5.18
+	redox_users@0.5.2
+	regex-automata@0.4.13
+	regex-syntax@0.8.8
+	rsconf@0.3.0
+	rust-embed-impl@8.11.0
+	rust-embed-utils@8.11.0
+	rust-embed@8.11.0
+	same-file@1.0.6
+	scc@2.4.0
+	scopeguard@1.2.0
+	sdd@3.0.10
+	serde@1.0.228
+	serde_core@1.0.228
+	serde_derive@1.0.228
+	serial_test@3.3.1
+	serial_test_derive@3.3.1
+	sha2@0.10.9
+	shellexpand@3.1.2
+	shlex@1.3.0
+	siphasher@1.0.2
+	smallvec@1.15.1
+	strsim@0.11.1
+	syn@2.0.114
+	thiserror-impl@2.0.18
+	thiserror@2.0.18
+	typenum@1.19.0
+	unicode-ident@1.0.22
+	unicode-segmentation@1.12.0
+	unicode-width@0.2.2
+	unix_path@1.0.1
+	unix_str@1.0.0
+	utf8parse@0.2.2
+	version_check@0.9.5
+	walkdir@2.5.0
+	wasi@0.11.1+wasi-snapshot-preview1
+	wasip2@1.0.1+wasi-0.2.4
+	widestring@1.2.1
+	winapi-util@0.1.11
+	windows-link@0.2.1
+	windows-sys@0.61.2
+	wit-bindgen@0.46.0
+	xterm-color@1.0.2
+	zerocopy-derive@0.8.37
+	zerocopy@0.8.37
+"
+
+if [[ ${PV} != 9999 ]]; then
+	declare -A GIT_CRATES=(
+		[pcre2-sys]='https://github.com/fish-shell/rust-pcre2;85b7afba1a9d9bd445779800e5bcafeb732e4421;rust-pcre2-%commit%/pcre2-sys'
+		[pcre2]='https://github.com/fish-shell/rust-pcre2;85b7afba1a9d9bd445779800e5bcafeb732e4421;rust-pcre2-%commit%'
+	)
+fi
+
+RUST_MIN_VER="1.85.0"
+
+PYTHON_COMPAT=( python3_{11..14} )
+
+inherit cargo cmake python-any-r1 readme.gentoo-r1 xdg
+
+DESCRIPTION="Friendly Interactive SHell"
+HOMEPAGE="https://fishshell.com/"
+
+MY_PV="${PV/_beta/b}"
+MY_P="${PN}-${MY_PV}"
+
+if [[ ${PV} == 9999 ]]; then
+	inherit git-r3
+	EGIT_REPO_URI="https://github.com/fish-shell/fish-shell.git"
+else
+	SRC_URI="
+		https://github.com/fish-shell/fish-shell/releases/download/${MY_PV}/${MY_P}.tar.xz
+		${CARGO_CRATE_URIS}
+	"
+	KEYWORDS="amd64 ~arm64 ~loong ppc64 ~riscv ~x64-macos"
+fi
+
+S="${WORKDIR}/${MY_P}"
+
+LICENSE="GPL-2 BSD BSD-2 CC0-1.0 GPL-2+ ISC LGPL-2+ MIT PSF-2 ZLIB"
+# Dependent crate licenses
+LICENSE+=" Apache-2.0 MIT MPL-2.0 Unicode-3.0 ZLIB"
+SLOT="0"
+IUSE="+doc nls test"
+
+RESTRICT="!test? ( test )"
+
+BDEPEND="
+	virtual/pkgconfig
+	${PYTHON_USEDEP}
+	doc? ( $(python_gen_any_dep 'dev-python/sphinx[${PYTHON_USEDEP}]') )
+	nls? ( sys-devel/gettext )
+	test? (
+		app-misc/tmux
+		dev-vcs/git
+		sys-apps/less
+		$(python_gen_any_dep 'dev-python/pexpect[${PYTHON_USEDEP}]')
+	)
+"
+DEPEND="dev-libs/libpcre2[pcre32]"
+RDEPEND="${DEPEND}"
+
+QA_FLAGS_IGNORED="usr/bin/.*"
+
+python_check_deps() {
+	if use doc; then
+		python_has_version "dev-python/sphinx[${PYTHON_USEDEP}]" || return 1
+	fi
+	if use test; then
+		python_has_version "dev-python/pexpect[${PYTHON_USEDEP}]" || return 1
+	fi
+}
+
+pkg_setup() {
+	if use doc || use test; then
+		python-any-r1_pkg_setup
+	fi
+	rust_pkg_setup
+
+	export PKG_CONFIG_ALLOW_CROSS=1
+}
+
+src_prepare() {
+	# Bug: https://bugs.gentoo.org/952080
+	sed -e '/^lto = /d' -i Cargo.toml || die "Failed to remove LTO from cargo package"
+
+	cmake_src_prepare
+}
+
+src_unpack() {
+	if [[ ${PV} == 9999 ]]; then
+		git-r3_src_unpack
+		cargo_live_src_unpack
+	else
+		cargo_src_unpack
+	fi
+}
+
+src_configure() {
+	local mycmakeargs=(
+		-DCMAKE_INSTALL_SYSCONFDIR="${EPREFIX}/etc"
+		-DCMAKE_INSTALL_DATADIR="${EPREFIX}/usr/share"
+		-DWITH_DOCS="$(usex doc ON OFF)"
+		-DWITH_MESSAGE_LOCALIZATION="$(usex nls ON OFF)"
+		-DRust_CARGO="${CARGO}"
+		-DRust_COMPILER="${RUSTC}"
+	)
+	local -x CMAKE_BUILD_TYPE="$(usex debug Debug Release)"
+	cargo_env cmake_src_configure
+}
+
+src_compile() {
+	local -x CARGO_TERM_COLOR=always
+	cargo_env cmake_src_compile
+}
+
+src_test() {
+	# Very fragile tests, don't seem to work in sandboxed environment.
+	# No die to allow repeating tests.
+	rm -v \
+		tests/checks/tmux-pager.fish \
+		tests/checks/tmux-wrapping.fish \
+		tests/checks/tmux-commandline.fish \
+		tests/checks/tmux-prompt.fish \
+		tests/pexpects/terminal.py \
+		|| :
+
+	cargo_env cmake_build fish_run_tests
+}
+
+src_install() {
+	cargo_env cmake_src_install
+	keepdir /usr/share/fish/vendor_{completions,conf,functions}.d
+	readme.gentoo_create_doc
+}
+
+pkg_postinst() {
+	readme.gentoo_print_elog
+	xdg_pkg_postinst
+}
