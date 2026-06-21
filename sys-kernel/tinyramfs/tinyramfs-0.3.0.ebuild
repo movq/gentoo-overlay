@@ -7,7 +7,7 @@ DESCRIPTION="Linux initramfs generator"
 
 HOMEPAGE="https://git.mjones.io/mike/tinyramfs"
 
-SRC_URI="https://git.mjones.io/mike/tinyramfs/archive/1d8fe3e206c32b31c32c8565741b5210e49486a2.tar.gz -> tinyramfs-0.3.0-mike.tar.gz"
+SRC_URI="https://git.mjones.io/mike/tinyramfs/archive/29929f3d13f0340a842c196e10dc839ad52dd7f0.tar.gz -> tinyramfs-0.3.0-mike.tar.gz"
 
 S="${WORKDIR}/${PN}"
 
