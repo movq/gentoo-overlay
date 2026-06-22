@@ -1,0 +1,19 @@
+#!/sbin/openrc-run
+supervisor=supervise-daemon
+
+name="matrix-authentication-sevice"
+description="Matrix Authentication Service"
+
+: ${config:="/etc/matrix-authentication-service/config.yml"}
+: ${command_user:="mas:mas"}
+
+command="/usr/bin/mas-cli"
+command_args="-c $config $command_args"
+
+depend() {
+	need net
+}
+
+start_pre() {
+	checkpath --file --owner "$command_user" "$config"
+}
