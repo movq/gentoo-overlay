@@ -707,6 +707,9 @@ BDEPEND="
 	dev-util/open-policy-agent
 	net-libs/nodejs
 "
+RDEPEND="
+	acct-user/mas
+"
 
 src_prepare() {
 	default
