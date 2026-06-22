@@ -1,0 +1,174 @@
+From b67a1e92b0ecde54e1db80390388f41c35551635 Mon Sep 17 00:00:00 2001
+From: Alexandra Parker <alex@etherbunny.net>
+Date: Sun, 31 May 2026 13:52:35 -0700
+Subject: [PATCH] [Fix] mime_string const iterator
+
+mime_string's iterator is just a value iterator anyway. it's
+intrinsically const. drop reference to const_iterator, let iterator_base
+take a const pointer, and mark begin() and end() as const.
+
+doctest 2.5.0 receives a const reference and can't use a mutable iterator,
+which leads to compile error.
+---
+ src/libmime/mime_string.hxx | 49 ++++++++++++++-----------------------
+ 1 file changed, 19 insertions(+), 30 deletions(-)
+
+diff --git a/src/libmime/mime_string.hxx b/src/libmime/mime_string.hxx
+index d6c11d018b..8bde5fd4df 100644
+--- a/src/libmime/mime_string.hxx
++++ b/src/libmime/mime_string.hxx
+@@ -94,7 +94,7 @@ public:
+ 		return idx != it.idx;
+ 	}
+ 
+-	iterator_base(difference_type index, Container *instance) noexcept
++	iterator_base(difference_type index, const Container *instance) noexcept
+ 		: idx(index), cont_instance(instance)
+ 	{
+ 	}
+@@ -103,11 +103,6 @@ public:
+ 
+ 	iterator_base &operator=(const iterator_base &) noexcept = default;
+ 
+-	Container *get_instance() const noexcept
+-	{
+-		return cont_instance;
+-	}
+-
+ 	codepoint_type get_value() const noexcept
+ 	{
+ 		auto i = idx;
+@@ -118,7 +113,7 @@ public:
+ 
+ protected:
+ 	difference_type idx;
+-	Container *cont_instance = nullptr;
++	const Container *cont_instance = nullptr;
+ 
+ protected:
+ 	void advance(difference_type n) noexcept
+@@ -164,7 +159,7 @@ public:
+ 		return idx != it.idx;
+ 	}
+ 
+-	iterator_base(difference_type index, Container *instance) noexcept
++	iterator_base(difference_type index, const Container *instance) noexcept
+ 		: idx(index), cont_instance(instance)
+ 	{
+ 	}
+@@ -172,10 +167,6 @@ public:
+ 	iterator_base() noexcept = default;
+ 	iterator_base(const iterator_base &) noexcept = default;
+ 	iterator_base &operator=(const iterator_base &) noexcept = default;
+-	Container *get_instance() const noexcept
+-	{
+-		return cont_instance;
+-	}
+ 
+ 	value_type get_value() const noexcept
+ 	{
+@@ -184,7 +175,7 @@ public:
+ 
+ protected:
+ 	difference_type idx;
+-	Container *cont_instance = nullptr;
++	const Container *cont_instance = nullptr;
+ 
+ protected:
+ 	//! Advance the iterator n times (negative values allowed!)
+@@ -203,23 +194,21 @@ protected:
+ 	}
+ };
+ 
+-template<typename Container, bool Raw>
+-struct iterator;
+-template<typename Container, bool Raw>
+-struct const_iterator;
+ 
+ template<typename Container, bool Raw = false>
+ struct iterator : iterator_base<Container, Raw> {
+-	iterator(typename iterator_base<Container, Raw>::difference_type index, Container *instance) noexcept
+-		: iterator_base<Container, Raw>(index, instance)
++	using base = iterator_base<Container, Raw>;
++	using typename base::difference_type;
++	using typename base::reference_type;
++
++	iterator(difference_type index, const Container *instance) noexcept
++		: base(index, instance)
+ 	{
+ 	}
+ 	iterator() noexcept = default;
+ 	iterator(const iterator &) noexcept = default;
+ 
+ 	iterator &operator=(const iterator &) noexcept = default;
+-	/* Disallow creating from const_iterator */
+-	iterator(const const_iterator<Container, Raw> &) = delete;
+ 
+ 	/* Prefix */
+ 	iterator &operator++() noexcept
+@@ -251,33 +240,33 @@ struct iterator : iterator_base<Container, Raw> {
+ 		return tmp;
+ 	}
+ 
+-	iterator operator+(typename iterator_base<Container, Raw>::difference_type n) const noexcept
++	iterator operator+(difference_type n) const noexcept
+ 	{
+ 		iterator it{*this};
+ 		it.advance(n);
+ 		return it;
+ 	}
+ 
+-	iterator &operator+=(typename iterator_base<Container, Raw>::difference_type n) noexcept
++	iterator &operator+=(difference_type n) noexcept
+ 	{
+ 		this->advance(n);
+ 		return *this;
+ 	}
+ 
+-	iterator operator-(typename iterator_base<Container, Raw>::difference_type n) const noexcept
++	iterator operator-(difference_type n) const noexcept
+ 	{
+ 		iterator it{*this};
+ 		it.advance(-n);
+ 		return it;
+ 	}
+ 
+-	iterator &operator-=(typename iterator_base<Container, Raw>::difference_type n) noexcept
++	iterator &operator-=(difference_type n) noexcept
+ 	{
+ 		this->advance(-n);
+ 		return *this;
+ 	}
+ 
+-	typename iterator::reference_type operator*() const noexcept
++	reference_type operator*() const noexcept
+ 	{
+ 		return this->get_value();
+ 	}
+@@ -523,22 +512,22 @@ public:
+ 	}
+ 
+ 	/* Iterators */
+-	inline auto begin() noexcept -> iterator
++	inline auto begin() const noexcept -> iterator
+ 	{
+ 		return {0, this};
+ 	}
+ 
+-	inline auto raw_begin() noexcept -> raw_iterator
++	inline auto raw_begin() const noexcept -> raw_iterator
+ 	{
+ 		return {0, this};
+ 	}
+ 
+-	inline auto end() noexcept -> iterator
++	inline auto end() const noexcept -> iterator
+ 	{
+ 		return {(difference_type) size(), this};
+ 	}
+ 
+-	inline auto raw_end() noexcept -> raw_iterator
++	inline auto raw_end() const noexcept -> raw_iterator
+ 	{
+ 		return {(difference_type) size(), this};
+ 	}
