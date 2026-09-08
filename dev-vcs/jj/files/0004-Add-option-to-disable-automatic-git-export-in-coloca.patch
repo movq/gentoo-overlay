@@ -1,0 +1,272 @@
+From 8a4760d079b6d1ba93913f0f7ad2940a6bdc2ffc Mon Sep 17 00:00:00 2001
+From: Mike Jones <mike@mjones.org>
+Date: Sat, 14 Feb 2026 16:52:39 +0000
+Subject: [PATCH 4/5] Add option to disable automatic git export in colocated
+ mode
+
+---
+ cli/src/cli_util.rs                 | 22 +++++++++++++----
+ cli/src/commands/file/untrack.rs    |  2 ++
+ cli/src/commands/git/export.rs      |  3 ++-
+ cli/src/config/misc.toml            |  1 +
+ cli/tests/cli-reference@.md.snap    |  2 +-
+ cli/tests/test_git_import_export.rs | 37 +++++++++++++++++++++++++++++
+ docs/config.md                      | 15 ++++++++++++
+ docs/git-compatibility.md           |  5 ++--
+ docs/github.md                      |  6 +++--
+ 9 files changed, 83 insertions(+), 10 deletions(-)
+
+diff --git a/cli/src/cli_util.rs b/cli/src/cli_util.rs
+index cad6842c7..4fa740a12 100644
+--- a/cli/src/cli_util.rs
++++ b/cli/src/cli_util.rs
+@@ -1241,6 +1241,7 @@ pub struct WorkspaceCommandHelper {
+     op_summary_template_text: String,
+     may_snapshot_working_copy: bool,
+     may_update_working_copy: bool,
++    auto_export_git_refs: bool,
+ }
+ 
+ enum SnapshotWorkingCopyError {
+@@ -1278,6 +1279,7 @@ impl WorkspaceCommandHelper {
+         let op_summary_template_text = settings.get_string("templates.op_summary")?;
+         let may_update_working_copy =
+             may_snapshot_working_copy && env.command.should_commit_transaction();
++        let auto_export_git_refs = settings.get_bool("git.auto-export")?;
+ 
+         let helper = Self {
+             workspace,
+@@ -1287,6 +1289,7 @@ impl WorkspaceCommandHelper {
+             op_summary_template_text,
+             may_snapshot_working_copy,
+             may_update_working_copy,
++            auto_export_git_refs,
+         };
+         // Parse commit_summary template early to report error before starting
+         // mutable operation.
+@@ -1588,6 +1591,10 @@ to the current parents may contain changes from multiple commits.
+         self.env.working_copy_shared_with_git
+     }
+ 
++    pub fn auto_export_git_refs(&self) -> bool {
++        self.auto_export_git_refs
++    }
++
+     pub fn format_file_path(&self, file: &RepoPath) -> String {
+         self.path_converter().format_file_path(file)
+     }
+@@ -2212,6 +2219,7 @@ to the current parents may contain changes from multiple commits.
+                         workspace_root,
+                         &old_tree,
+                         &new_tree,
++                        self.auto_export_git_refs,
+                     )
+                     .await
+                     .map_err(snapshot_command_error)?;
+@@ -2402,8 +2410,10 @@ to the current parents may contain changes from multiple commits.
+                 )
+                 .await?;
+             }
+-            let stats = jj_lib::git::export_refs(tx.repo_mut())?;
+-            crate::git_util::print_git_export_stats(ui, &stats)?;
++            if self.auto_export_git_refs {
++                let stats = jj_lib::git::export_refs(tx.repo_mut())?;
++                crate::git_util::print_git_export_stats(ui, &stats)?;
++            }
+         }
+ 
+         self.user_repo = ReadonlyUserRepo::new(
+@@ -2705,11 +2715,14 @@ pub async fn export_working_copy_changes_to_git(
+     workspace_root: &Path,
+     old_tree: &MergedTree,
+     new_tree: &MergedTree,
++    auto_export_git_refs: bool,
+ ) -> Result<(), CommandError> {
+     let repo = mut_repo.base_repo().as_ref();
+     jj_lib::git::update_intent_to_add(repo, workspace_root, old_tree, new_tree).await?;
+-    let stats = jj_lib::git::export_refs(mut_repo)?;
+-    crate::git_util::print_git_export_stats(ui, &stats)?;
++    if auto_export_git_refs {
++        let stats = jj_lib::git::export_refs(mut_repo)?;
++        crate::git_util::print_git_export_stats(ui, &stats)?;
++    }
+     Ok(())
+ }
+ #[cfg(not(feature = "git"))]
+@@ -2719,6 +2732,7 @@ pub async fn export_working_copy_changes_to_git(
+     _workspace_root: &Path,
+     _old_tree: &MergedTree,
+     _new_tree: &MergedTree,
++    _auto_export_git_refs: bool,
+ ) -> Result<(), CommandError> {
+     Ok(())
+ }
+diff --git a/cli/src/commands/file/untrack.rs b/cli/src/commands/file/untrack.rs
+index 4760a5c83..850b22f9f 100644
+--- a/cli/src/commands/file/untrack.rs
++++ b/cli/src/commands/file/untrack.rs
+@@ -56,6 +56,7 @@ pub(crate) async fn cmd_file_untrack(
+ 
+     let working_copy_shared_with_git = workspace_command.working_copy_shared_with_git();
+     let workspace_root = workspace_command.workspace_root().to_owned();
++    let auto_export_git_refs = workspace_command.auto_export_git_refs();
+ 
+     let mut tx = workspace_command.start_transaction().into_inner();
+     let (mut locked_ws, wc_commit) = workspace_command.start_working_copy_mutation().await?;
+@@ -113,6 +114,7 @@ Make sure they're ignored, then try again.",
+             &workspace_root,
+             &wc_tree,
+             &new_commit.tree(),
++            auto_export_git_refs,
+         )
+         .await?;
+     }
+diff --git a/cli/src/commands/git/export.rs b/cli/src/commands/git/export.rs
+index 0239ccfb9..539a623da 100644
+--- a/cli/src/commands/git/export.rs
++++ b/cli/src/commands/git/export.rs
+@@ -24,7 +24,8 @@ use crate::ui::Ui;
+ ///
+ /// By default, this command does nothing in colocated workspaces because the
+ /// export happens automatically. Use `--ignore-working-copy` to forcibly export
+-/// changes.
++/// changes. If `git.auto-export` is set to `false`, this command is needed to
++/// update Git refs.
+ #[derive(clap::Args, Clone, Debug)]
+ pub struct GitExportArgs {}
+ 
+diff --git a/cli/src/config/misc.toml b/cli/src/config/misc.toml
+index 70ed210c1..4a0c320b1 100644
+--- a/cli/src/config/misc.toml
++++ b/cli/src/config/misc.toml
+@@ -25,6 +25,7 @@ disabled-branches = []
+ # no builtin aliases
+ 
+ [git]
++auto-export = true
+ colocate = true
+ object-hash = "sha1"
+ private-commits = "none()"
+diff --git a/cli/tests/cli-reference@.md.snap b/cli/tests/cli-reference@.md.snap
+index 88e8c7130..2574c50af 100644
+--- a/cli/tests/cli-reference@.md.snap
++++ b/cli/tests/cli-reference@.md.snap
+@@ -1771,7 +1771,7 @@ Show the current colocation status
+ 
+ Update the underlying Git repo with changes made in the repo
+ 
+-By default, this command does nothing in colocated workspaces because the export happens automatically. Use `--ignore-working-copy` to forcibly export changes.
++By default, this command does nothing in colocated workspaces because the export happens automatically. Use `--ignore-working-copy` to forcibly export changes. If `git.auto-export` is set to `false`, this command is needed to update Git refs.
+ 
+ **Usage:** `jj git export`
+ 
+diff --git a/cli/tests/test_git_import_export.rs b/cli/tests/test_git_import_export.rs
+index 1b679a23b..1c48cec4a 100644
+--- a/cli/tests/test_git_import_export.rs
++++ b/cli/tests/test_git_import_export.rs
+@@ -121,6 +121,43 @@ fn test_git_export_conflicting_git_refs() -> TestResult {
+     Ok(())
+ }
+ 
++#[test]
++fn test_colocated_git_auto_export_disabled() {
++    let test_env = TestEnvironment::default();
++    test_env.add_config(
++        r#"
++[git]
++auto-export = false
++        "#,
++    );
++    test_env
++        .run_jj_in(".", ["git", "init", "--colocate", "repo"])
++        .success();
++    let work_dir = test_env.work_dir("repo");
++    let git_repo_path = work_dir.root().join(".git");
++
++    work_dir
++        .run_jj(["bookmark", "create", "-r@", "main"])
++        .success();
++    let git_repo = git::open(&git_repo_path);
++    insta::assert_debug_snapshot!(get_git_repo_refs(&git_repo), @r#"
++    []
++    "#);
++
++    work_dir.run_jj(["git", "export"]).success();
++    let git_repo = git::open(&git_repo_path);
++    insta::assert_debug_snapshot!(get_git_repo_refs(&git_repo), @r#"
++    [
++        (
++            "refs/heads/main",
++            CommitId(
++                "e8849ae12c709f2321908879bc724fdb2ab8a781",
++            ),
++        ),
++    ]
++    "#);
++}
++
+ #[test]
+ fn test_git_export_undo() -> TestResult {
+     let test_env = TestEnvironment::default();
+diff --git a/docs/config.md b/docs/config.md
+index 5d4bb11af..1d9a617b8 100644
+--- a/docs/config.md
++++ b/docs/config.md
+@@ -1793,6 +1793,21 @@ all code forges support SHA-256 repositories yet.
+ [objects]: https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
+ [transition]: https://git-scm.com/docs/hash-function-transition
+ 
++### Automatic export in colocated workspaces
++
++By default, colocated workspaces automatically export bookmarks and tags to Git
++after each mutating `jj` command.
++
++You can disable that behavior by setting:
++
++```toml
++[git]
++auto-export = false
++```
++
++When disabled, Git refs may become stale until you run `jj git export`
++manually. This can be useful in repos with many refs where ref export is slow.
++
+ ### Default remotes for `jj git fetch` and `jj git push`
+ 
+ By default, if a single remote exists it is used for `jj git fetch` and `jj git
+diff --git a/docs/git-compatibility.md b/docs/git-compatibility.md
+index c9726fe82..1d2ab1793 100644
+--- a/docs/git-compatibility.md
++++ b/docs/git-compatibility.md
+@@ -102,8 +102,9 @@ your choice by adding `--remote <remote name>` to the `jj git clone` command.
+ A colocated Jujutsu workspace is a hybrid Jujutsu/Git workspace. This is the
+ default for Git-backed workspace created with `jj git init` or `jj git clone`.
+ The Git repo and the Jujutsu workspace then share the same working copy. Jujutsu
+-will import and export from and to the Git repo on every `jj` command
+-automatically.
++will import from and export to the Git repo on every `jj` command by default.
++Automatic export can be disabled with the `git.auto-export = false` setting, in
++which case you can run `jj git export` manually.
+ 
+ This mode is very convenient when tools (e.g. build tools) expect a Git repo to
+ be present.
+diff --git a/docs/github.md b/docs/github.md
+index 3868ac4aa..13ec2f85d 100644
+--- a/docs/github.md
++++ b/docs/github.md
+@@ -72,8 +72,10 @@ After doing `jj git init`, which
+ unusual, as Git mainly works with named branches; jj does not.
+ 
+ In a colocated workspace, every `jj` command will automatically synchronize
+-Jujutsu's view of the repo with Git's view. For example, `jj commit` updates the
+-HEAD of the Git repository, enabling an incremental migration.
++Jujutsu's view of the repo with Git's view by default. If needed for
++performance, you can disable automatic export with `git.auto-export = false`
++and run `jj git export` manually. For example, `jj commit` updates the HEAD of
++the Git repository, enabling an incremental migration.
+ 
+ ```shell
+ $ nvim docs/tutorial.md
+-- 
+2.53.0
+

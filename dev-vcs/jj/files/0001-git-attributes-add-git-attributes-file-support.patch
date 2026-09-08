@@ -1,0 +1,2210 @@
+From c69f72b06b5b14167d62d5ebe096747183905787 Mon Sep 17 00:00:00 2001
+From: Gustavo Inacio <incio.gusta@gmail.com>
+Date: Sun, 27 Jul 2025 21:06:52 +0200
+Subject: [PATCH 1/5] git-attributes: add git attributes file support
+
+---
+ Cargo.lock               | 528 ++++++++++++++++-------------
+ Cargo.toml               |   2 +-
+ lib/Cargo.toml           |   1 +
+ lib/src/gitattributes.rs | 711 +++++++++++++++++++++++++++++++++++++++
+ lib/src/lib.rs           |   1 +
+ 5 files changed, 999 insertions(+), 244 deletions(-)
+ create mode 100644 lib/src/gitattributes.rs
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 674e3fc17..12de7008b 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -104,7 +104,7 @@ version = "1.1.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
+ dependencies = [
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -115,7 +115,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
+ dependencies = [
+  "anstyle",
+  "once_cell_polyfill",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -177,7 +177,7 @@ checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -373,9 +373,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "cc"
+-version = "1.4.3"
++version = "1.4.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "509591b7bcd67f4ef775afad7662703b4935daaa6ec0e5605cfb1090b32a2b6d"
++checksum = "005ec2760ca554fae18df7a11195552ec576cd665632a881bc011d5bb2fd4d80"
+ dependencies = [
+  "find-msvc-tools",
+  "shlex",
+@@ -395,12 +395,12 @@ checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
+ 
+ [[package]]
+ name = "chacha20"
+-version = "0.10.1"
++version = "0.10.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d524456ba66e72eb8b115ff89e01e497f8e6d11d78b70b1aa13c0fbd97540a81"
++checksum = "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06"
+ dependencies = [
+  "cfg-if",
+- "cpufeatures 0.3.0",
++ "cpufeatures 0.3.1",
+  "rand_core 0.10.1",
+ ]
+ 
+@@ -506,7 +506,7 @@ dependencies = [
+  "heck",
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -562,7 +562,7 @@ checksum = "4fe5f465a4f6fee88fad41b85d990f84c835335e85b5d9e6e63e0d06d28cba7c"
+ dependencies = [
+  "encode_unicode",
+  "libc",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -580,6 +580,12 @@ version = "0.8.7"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+ 
++[[package]]
++name = "core_detect"
++version = "1.0.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
++
+ [[package]]
+ name = "cpufeatures"
+ version = "0.2.17"
+@@ -591,18 +597,18 @@ dependencies = [
+ 
+ [[package]]
+ name = "cpufeatures"
+-version = "0.3.0"
++version = "0.3.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
++checksum = "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566"
+ dependencies = [
+  "libc",
+ ]
+ 
+ [[package]]
+ name = "crc32fast"
+-version = "1.5.0"
++version = "1.5.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
++checksum = "8498c871161e1742aaa9d52551b2d6ebdd4c3d45a3be423e3728f33b955be550"
+ dependencies = [
+  "cfg-if",
+ ]
+@@ -650,18 +656,18 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
+ 
+ [[package]]
+ name = "crossbeam-channel"
+-version = "0.5.16"
++version = "0.5.17"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d85363c37faeca707aef026efa9f3b34d077bce547e48f770770625c6013679e"
++checksum = "98b0cc327b5bc766e7fda9c9260cc0fa81b43a8e240440422dff70788e3f9ef1"
+ dependencies = [
+  "crossbeam-utils",
+ ]
+ 
+ [[package]]
+ name = "crossbeam-deque"
+-version = "0.8.7"
++version = "0.8.8"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "5181e0de7b61eb03a81e347d6dd8797bae9da5146707b51077e2d71a54ec0ceb"
++checksum = "622f3fc73690be383c7214310406f28a90e6edeadc3cea882f9d71e495b9711a"
+ dependencies = [
+  "crossbeam-epoch",
+  "crossbeam-utils",
+@@ -669,18 +675,18 @@ dependencies = [
+ 
+ [[package]]
+ name = "crossbeam-epoch"
+-version = "0.9.20"
++version = "0.9.21"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
++checksum = "dc74980687109a3b14c72fd458107bf0baa1da1a1a805e178d15501ba9b86d9d"
+ dependencies = [
+  "crossbeam-utils",
+ ]
+ 
+ [[package]]
+ name = "crossbeam-utils"
+-version = "0.8.22"
++version = "0.8.23"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17"
++checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+ 
+ [[package]]
+ name = "crossterm"
+@@ -752,14 +758,14 @@ checksum = "e0b1fab2ae45819af2d0731d60f2afe17227ebb1a1538a236da84c93e9a60162"
+ dependencies = [
+  "dispatch2",
+  "nix 0.31.3",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+ name = "darling"
+-version = "0.24.0"
++version = "0.24.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "88490bf1b990d87eaaa7ac8aa887f629a08e7359765b4911faf63c3763347d23"
++checksum = "ed17f5901b6630b993ca003def43f2f8ef4014fc13b047b57aad617ff32bc2ec"
+ dependencies = [
+  "darling_core",
+  "darling_macro",
+@@ -767,26 +773,26 @@ dependencies = [
+ 
+ [[package]]
+ name = "darling_core"
+-version = "0.24.0"
++version = "0.24.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "084e274f91c482280130e1e34e0b8d6e66776a060d7b6de7b84289ca778868c4"
++checksum = "6837e2cf7485aaae18f86181d2f0e9a7ed297a025e220aeabf63fdebd3a2ddff"
+ dependencies = [
+  "ident_case",
+  "proc-macro2",
+  "quote",
+  "strsim",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+ name = "darling_macro"
+-version = "0.24.0"
++version = "0.24.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "68f5792fa0d41cd2325ce0ffa64f0a340eaebd4971a3a0c5e1ffd2cc488a355e"
++checksum = "2ac7135c3ef02b2f7833bbeb1be5ba7f966dcde8a87c6b87f65a778d71a02785"
+ dependencies = [
+  "darling_core",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -937,7 +943,7 @@ dependencies = [
+  "libc",
+  "option-ext",
+  "redox_users",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -960,7 +966,7 @@ checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -1001,11 +1007,17 @@ checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
+ 
+ [[package]]
+ name = "encoding_rs"
+-version = "0.8.35"
++version = "0.8.40"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
++checksum = "2a7a45518d2863d18aa47f4a0cf9faec2aa4304cc09df5e41299f276b3ad135e"
+ dependencies = [
+  "cfg-if",
++ "core_detect",
++ "multiversion",
++ "multiversion_no_op",
++ "rustversion",
++ "scopeguard",
++ "simdutf8",
+ ]
+ 
+ [[package]]
+@@ -1044,7 +1056,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+ dependencies = [
+  "libc",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -1060,7 +1072,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "de48cc4d1c1d97a20fd819def54b890cadde72ed3ad0c614822a0a433361be96"
+ dependencies = [
+  "cfg-if",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -1106,9 +1118,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "fancy-regex"
+-version = "0.19.0"
++version = "0.19.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "476de73bddf2ef8490aa4ee8f1cf40b430bf1d56c48c22080e5186952cd580e6"
++checksum = "52e0387578e845beb7a1acff126228499f26cb18edf12919cc513bb863266464"
+ dependencies = [
+  "bit-set 0.8.0",
+  "regex-automata",
+@@ -1154,9 +1166,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "find-msvc-tools"
+-version = "0.1.11"
++version = "0.1.12"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
++checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
+ 
+ [[package]]
+ name = "finl_unicode"
+@@ -1277,7 +1289,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -1372,7 +1384,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "fdefc1465d8631807deaf504dacdeff628b978de515653b47976ca7c28ab2a7a"
+ dependencies = [
+  "gix-actor",
+- "gix-attributes",
++ "gix-attributes 0.35.0",
+  "gix-command",
+  "gix-commitgraph",
+  "gix-config",
+@@ -1380,11 +1392,11 @@ dependencies = [
+  "gix-diff",
+  "gix-dir",
+  "gix-discover",
+- "gix-error",
+- "gix-features",
++ "gix-error 0.3.2",
++ "gix-features 0.49.1",
+  "gix-filter",
+  "gix-fs",
+- "gix-glob",
++ "gix-glob 0.27.1",
+  "gix-hash",
+  "gix-hashtable",
+  "gix-ignore",
+@@ -1397,7 +1409,7 @@ dependencies = [
+  "gix-path",
+  "gix-pathspec",
+  "gix-protocol",
+- "gix-quote",
++ "gix-quote 0.8.0",
+  "gix-ref",
+  "gix-refspec",
+  "gix-revision",
+@@ -1429,7 +1441,24 @@ checksum = "e37efa99929ac62f980fb1a7dcd09dea85b3aa6ead6ba0498362add3f4e698de"
+ dependencies = [
+  "bstr",
+  "gix-date",
+- "gix-error",
++ "gix-error 0.3.2",
++]
++
++[[package]]
++name = "gix-attributes"
++version = "0.33.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "39b40888d0ed415c0744a6cdc61eebf0304c9d26ab726725b718443c322e5ba4"
++dependencies = [
++ "bstr",
++ "gix-glob 0.26.1",
++ "gix-path",
++ "gix-quote 0.7.2",
++ "gix-trace",
++ "kstring",
++ "smallvec",
++ "thiserror 2.0.20",
++ "unicode-bom",
+ ]
+ 
+ [[package]]
+@@ -1439,10 +1468,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "76b83782ac69ae28921a6e8fbcf2e24069613f1518030b97ae622b079abffa54"
+ dependencies = [
+  "bstr",
+- "gix-features",
+- "gix-glob",
++ "gix-features 0.49.1",
++ "gix-glob 0.27.1",
+  "gix-path",
+- "gix-quote",
++ "gix-quote 0.8.0",
+  "gix-trace",
+  "smallvec",
+  "thiserror 2.0.20",
+@@ -1455,7 +1484,7 @@ version = "0.4.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f17013c7ef5cb95ebb4bf4978201e6a8a42ffea9d666fd5388f1b7e742307d80"
+ dependencies = [
+- "gix-error",
++ "gix-error 0.3.2",
+ ]
+ 
+ [[package]]
+@@ -1464,7 +1493,7 @@ version = "0.8.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "00e32f938b3745ac93d73bc7490b6a15a661b2fc81973bfe90e275cc53c908e1"
+ dependencies = [
+- "gix-error",
++ "gix-error 0.3.2",
+ ]
+ 
+ [[package]]
+@@ -1475,7 +1504,7 @@ checksum = "aa00adbd2c77f584cfe41f348772d2f131af1fa519a7f6b98638f1144ead96a4"
+ dependencies = [
+  "bstr",
+  "gix-path",
+- "gix-quote",
++ "gix-quote 0.8.0",
+  "gix-trace",
+ ]
+ 
+@@ -1487,7 +1516,7 @@ checksum = "6b93c9fb1f5be01bba54a7a3b7455d359efc68555539c75ef74b8021bb6db497"
+ dependencies = [
+  "bstr",
+  "gix-chunk",
+- "gix-error",
++ "gix-error 0.3.2",
+  "gix-hash",
+  "memmap2",
+  "nonempty",
+@@ -1501,8 +1530,8 @@ checksum = "f973c28c0a4871a7926fc90c8377d4458fd6cbb19692f56582b4d2022313ae90"
+ dependencies = [
+  "bstr",
+  "gix-config-value",
+- "gix-features",
+- "gix-glob",
++ "gix-features 0.49.1",
++ "gix-glob 0.27.1",
+  "gix-path",
+  "gix-ref",
+  "gix-sec",
+@@ -1532,7 +1561,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "e63d9aa18f29facd571c8953e66224ee0075b9e16622024794555ed4acceea85"
+ dependencies = [
+  "bstr",
+- "gix-error",
++ "gix-error 0.3.2",
+  "itoa",
+  "jiff",
+ ]
+@@ -1544,7 +1573,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1b1689ff5ddeee4acfb2a43e875a1072a76d208624b15a9065c938b39cb0da2a"
+ dependencies = [
+  "bstr",
+- "gix-attributes",
++ "gix-attributes 0.35.0",
+  "gix-command",
+  "gix-filter",
+  "gix-fs",
+@@ -1596,6 +1625,15 @@ dependencies = [
+  "thiserror 2.0.20",
+ ]
+ 
++[[package]]
++name = "gix-error"
++version = "0.2.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4a9292309fd944e71b2a3c96d3c03a6feb8852db646febdde7cbb9f79cb5f329"
++dependencies = [
++ "bstr",
++]
++
+ [[package]]
+ name = "gix-error"
+ version = "0.3.2"
+@@ -1605,6 +1643,16 @@ dependencies = [
+  "bstr",
+ ]
+ 
++[[package]]
++name = "gix-features"
++version = "0.48.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1849ae154d38bc403185be14fa871e38e3c93ee606875d94e207fdb9fba52dbc"
++dependencies = [
++ "gix-trace",
++ "libc",
++]
++
+ [[package]]
+ name = "gix-features"
+ version = "0.49.1"
+@@ -1632,13 +1680,13 @@ checksum = "9c30b28d957e2e6f1e1bbfbfd26b8e0bb0aab68d8a5e730fb4fd3049943575e3"
+ dependencies = [
+  "bstr",
+  "encoding_rs",
+- "gix-attributes",
++ "gix-attributes 0.35.0",
+  "gix-command",
+  "gix-hash",
+  "gix-object",
+  "gix-packetline",
+  "gix-path",
+- "gix-quote",
++ "gix-quote 0.8.0",
+  "gix-trace",
+  "gix-utils",
+  "smallvec",
+@@ -1652,12 +1700,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ebcfa9fd253f25350a3b21b3dd74034a446098e373c6123d4cee3519894f12ef"
+ dependencies = [
+  "bstr",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-path",
+  "gix-utils",
+  "thiserror 2.0.20",
+ ]
+ 
++[[package]]
++name = "gix-glob"
++version = "0.26.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d1fcb8ef5b16bcf874abe9b68d8abb3c0493c876d367ab824151f30a0f3f3756"
++dependencies = [
++ "bitflags 2.13.1",
++ "bstr",
++ "gix-features 0.48.1",
++ "gix-path",
++]
++
+ [[package]]
+ name = "gix-glob"
+ version = "0.27.1"
+@@ -1666,7 +1726,7 @@ checksum = "b417cf515fd8c91468b578071f76d6cba716f8a1eccd853906bff4908b2c1413"
+ dependencies = [
+  "bitflags 2.13.1",
+  "bstr",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-path",
+ ]
+ 
+@@ -1677,7 +1737,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "380b9c423a54f0821064b954b5a5ab25c660812f6a91da03c3f1cb4b10762aa5"
+ dependencies = [
+  "faster-hex",
+- "gix-features",
++ "gix-features 0.49.1",
+  "sha1-checked",
+  "sha2 0.11.0",
+  "thiserror 2.0.20",
+@@ -1701,7 +1761,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "65859a2f7de5e159d4344a5486ebf53b6bac22d5ec6afa836e47c10ae88a7f0f"
+ dependencies = [
+  "bstr",
+- "gix-glob",
++ "gix-glob 0.27.1",
+  "gix-path",
+  "gix-trace",
+  "unicode-bom",
+@@ -1728,7 +1788,7 @@ dependencies = [
+  "filetime",
+  "fnv",
+  "gix-bitmap",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-fs",
+  "gix-hash",
+  "gix-lock",
+@@ -1773,7 +1833,7 @@ version = "0.1.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "9af6bbdb3f3c62b4920407c479af1cc0beb27fd75a762782d48baed53d330958"
+ dependencies = [
+- "gix-error",
++ "gix-error 0.3.2",
+  "gix-hash",
+  "gix-hashtable",
+  "gix-object",
+@@ -1789,7 +1849,7 @@ dependencies = [
+  "gix-actor",
+  "gix-command",
+  "gix-date",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-hash",
+  "gix-hashtable",
+  "gix-tempfile",
+@@ -1807,14 +1867,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "cf45d195b71cb6363886e7b466821bf4dffd7aba1b6b814ff75488e0061d72a7"
+ dependencies = [
+  "arc-swap",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-fs",
+  "gix-hash",
+  "gix-hashtable",
+  "gix-object",
+  "gix-pack",
+  "gix-path",
+- "gix-quote",
++ "gix-quote 0.8.0",
+  "gix-zlib",
+  "memmap2",
+  "parking_lot",
+@@ -1831,8 +1891,8 @@ dependencies = [
+  "clru",
+  "crossbeam-deque",
+  "gix-chunk",
+- "gix-error",
+- "gix-features",
++ "gix-error 0.3.2",
++ "gix-features 0.49.1",
+  "gix-hash",
+  "gix-hashtable",
+  "gix-object",
+@@ -1876,9 +1936,9 @@ checksum = "c92e44c63ba53bb55aa88ee48847664beae9446417621582fb14dfc69b2f8c72"
+ dependencies = [
+  "bitflags 2.13.1",
+  "bstr",
+- "gix-attributes",
++ "gix-attributes 0.35.0",
+  "gix-config-value",
+- "gix-glob",
++ "gix-glob 0.27.1",
+  "gix-path",
+  "thiserror 2.0.20",
+ ]
+@@ -1891,7 +1951,7 @@ checksum = "68878c37ae168b474c762d70adc8a8e0f9323ed0d80444a672e2eb561fa16691"
+ dependencies = [
+  "bstr",
+  "gix-date",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-hash",
+  "gix-macros",
+  "gix-ref",
+@@ -1902,6 +1962,17 @@ dependencies = [
+  "thiserror 2.0.20",
+ ]
+ 
++[[package]]
++name = "gix-quote"
++version = "0.7.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a6e541fc33cc2b783b7979040d445a0c86a2eca747c8faea4ca84230d06ae6ef"
++dependencies = [
++ "bstr",
++ "gix-error 0.2.5",
++ "gix-utils",
++]
++
+ [[package]]
+ name = "gix-quote"
+ version = "0.8.0"
+@@ -1909,7 +1980,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f74795eb76eab8313063849f9cbd2bbcdc6e4692f71c1d7d0244ab11cd777329"
+ dependencies = [
+  "bstr",
+- "gix-error",
++ "gix-error 0.3.2",
+  "gix-utils",
+ ]
+ 
+@@ -1920,7 +1991,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8328387e7ab354e1dc3afb63e6b4d1866f82d7ce035222bc9d5baaf36bc88020"
+ dependencies = [
+  "gix-actor",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-fs",
+  "gix-hash",
+  "gix-lock",
+@@ -1955,7 +2026,7 @@ dependencies = [
+  "bstr",
+  "gix-commitgraph",
+  "gix-date",
+- "gix-error",
++ "gix-error 0.3.2",
+  "gix-hash",
+  "gix-object",
+  "gix-revwalk",
+@@ -1970,7 +2041,7 @@ checksum = "248823eefe405e2c0754b74f6f43ab6faab68670cdbf2d6e114cb0471f766450"
+ dependencies = [
+  "gix-commitgraph",
+  "gix-date",
+- "gix-error",
++ "gix-error 0.3.2",
+  "gix-hash",
+  "gix-hashtable",
+  "gix-object",
+@@ -1987,7 +2058,7 @@ dependencies = [
+  "bitflags 2.13.1",
+  "gix-path",
+  "libc",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -2013,7 +2084,7 @@ dependencies = [
+  "filetime",
+  "gix-diff",
+  "gix-dir",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-filter",
+  "gix-fs",
+  "gix-hash",
+@@ -2025,7 +2096,7 @@ dependencies = [
+  "hashbrown 0.16.1",
+  "portable-atomic",
+  "thiserror 2.0.20",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -2070,10 +2141,10 @@ checksum = "b3f41a64939953ff49117df4eb91334d299abc59ff57a90fb2193d8ffa5886f1"
+ dependencies = [
+  "bstr",
+  "gix-command",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-packetline",
+  "gix-path",
+- "gix-quote",
++ "gix-quote 0.8.0",
+  "gix-sec",
+  "gix-url",
+  "thiserror 2.0.20",
+@@ -2137,10 +2208,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "3ed36b627476e2072c129900a17c977a38052b5497e27308159bc881fbf4eecf"
+ dependencies = [
+  "bstr",
+- "gix-attributes",
+- "gix-features",
++ "gix-attributes 0.35.0",
++ "gix-features 0.49.1",
+  "gix-fs",
+- "gix-glob",
++ "gix-glob 0.27.1",
+  "gix-hash",
+  "gix-ignore",
+  "gix-index",
+@@ -2156,7 +2227,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "4c14faa5b9527823c656a033e841dde11ca5b774f1bca7a9cdc23db677e55d56"
+ dependencies = [
+  "bstr",
+- "gix-features",
++ "gix-features 0.49.1",
+  "gix-filter",
+  "gix-fs",
+  "gix-index",
+@@ -2173,9 +2244,9 @@ version = "0.36.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "de5ec0ccbab39c9994656ea031ded8ffd90b370a3cc8e360fbe3c4ebe7c64964"
+ dependencies = [
+- "gix-attributes",
+- "gix-error",
+- "gix-features",
++ "gix-attributes 0.35.0",
++ "gix-error 0.3.2",
++ "gix-features 0.49.1",
+  "gix-filter",
+  "gix-fs",
+  "gix-hash",
+@@ -2283,9 +2354,9 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+ 
+ [[package]]
+ name = "hermit-abi"
+-version = "0.5.2"
++version = "0.5.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
++checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
+ 
+ [[package]]
+ name = "hex"
+@@ -2396,9 +2467,9 @@ checksum = "e590f038c1464a96894fd6d10127e90a8be4509f56ff7ecef851b15cee0b7caa"
+ 
+ [[package]]
+ name = "icu_provider"
+-version = "2.3.0"
++version = "2.3.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "92a7ed671a6aad807a8651a2e1782a6598fda9ce5185dd8158549e95a91c6428"
++checksum = "d27bbb9d3abbefac45d55f647c9de1d44aafcd1186eb91879afef17c396c3e73"
+ dependencies = [
+  "displaydoc",
+  "icu_locale_core",
+@@ -2444,9 +2515,9 @@ checksum = "964de6e86d545b246d84badc0fef527924ace5134f30641c203ef52ba83f58d5"
+ 
+ [[package]]
+ name = "indexmap"
+-version = "2.14.0"
++version = "2.14.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
++checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
+ dependencies = [
+  "equivalent",
+  "hashbrown 0.17.1",
+@@ -2487,7 +2558,7 @@ dependencies = [
+  "indoc",
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -2516,7 +2587,7 @@ version = "1.0.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "82cb6a9f675da968c63b6208c641b9dca58fc0133ae53375736b1767b0cab8bd"
+ dependencies = [
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -2723,7 +2794,7 @@ version = "0.45.1"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -2743,6 +2814,7 @@ dependencies = [
+  "eyre",
+  "futures 0.3.34",
+  "gix",
++ "gix-attributes 0.33.2",
+  "gix-ignore",
+  "globset",
+  "indexmap",
+@@ -2784,9 +2856,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "js-sys"
+-version = "0.3.104"
++version = "0.3.105"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0e0c1080212aad755ea003d18543e8768dd432c48819efd73a7bf1e39b7a5a3a"
++checksum = "ce57d20d1ea864ce2ac172ab472d409214f4fd359f0b2a2775abdf522e2af99e"
+ dependencies = [
+  "cfg-if",
+  "futures-util",
+@@ -2803,7 +2875,7 @@ dependencies = [
+  "bytecount",
+  "data-encoding",
+  "email_address",
+- "fancy-regex 0.19.0",
++ "fancy-regex 0.19.1",
+  "fraction",
+  "getrandom 0.3.4",
+  "idna",
+@@ -2856,6 +2928,15 @@ dependencies = [
+  "thiserror 2.0.20",
+ ]
+ 
++[[package]]
++name = "kstring"
++version = "2.0.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "558bf9508a558512042d3095138b1f7b8fe90c5467d94f9f1da28b3731c5dbd1"
++dependencies = [
++ "static_assertions",
++]
++
+ [[package]]
+ name = "lab"
+ version = "0.11.0"
+@@ -2891,9 +2972,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "libredox"
+-version = "0.1.20"
++version = "0.1.23"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "28d0a00925a9f930d679b6789b721e3a7f9ed110f41b86d2497caa780c3a070a"
++checksum = "8d8f1ea3f21fd3405dcaf6c9b5c1630af9afc422d9073ea39c5f6d6c772e08ed"
+ dependencies = [
+  "libc",
+ ]
+@@ -2948,9 +3029,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "log"
+-version = "0.4.33"
++version = "0.4.34"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
++checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+ 
+ [[package]]
+ name = "logos"
+@@ -2994,9 +3075,9 @@ checksum = "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
+ 
+ [[package]]
+ name = "lru"
+-version = "0.18.2"
++version = "0.18.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "5d2f2f9b4ba7e6b24d95e7e899329d35be83bcded72c8540cdd5368932d1d90a"
++checksum = "ff9840bcc50b71349309900da0ce7279aa336ae71d73250b07998932c7d97c25"
+ dependencies = [
+  "hashbrown 0.17.1",
+ ]
+@@ -3079,14 +3160,14 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+ 
+ [[package]]
+ name = "mio"
+-version = "1.2.2"
++version = "1.2.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "30d65c71f1ce40ab09135ce117d742b9f8a19ff91a41a8b57ed50bc2de59c427"
++checksum = "4b18443e9c262bfe8fa82f51666e2642c53393f7e5c27b3e1aeab922cff5b9d8"
+ dependencies = [
+  "libc",
+  "log",
+  "wasi 0.11.1+wasi-snapshot-preview1",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -3095,6 +3176,34 @@ version = "0.10.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
+ 
++[[package]]
++name = "multiversion"
++version = "0.8.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7edb7f0ff51249dfda9ab96b5823695e15a052dc15074c9dbf3d118afaf2c201"
++dependencies = [
++ "multiversion-macros",
++ "target-features",
++]
++
++[[package]]
++name = "multiversion-macros"
++version = "0.8.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b093064383341eb3271f42e381cb8f10a01459478446953953c75d24bd339fc0"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++ "target-features",
++]
++
++[[package]]
++name = "multiversion_no_op"
++version = "1.0.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
++
+ [[package]]
+ name = "nix"
+ version = "0.29.0"
+@@ -3151,7 +3260,7 @@ version = "0.50.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+ dependencies = [
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -3414,9 +3523,9 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+ 
+ [[package]]
+ name = "pest"
+-version = "2.9.0"
++version = "2.9.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "5a07a60cc7a4d00c91f95c685609d1d2f79050e6804b70ebedd7650f0b839bcf"
++checksum = "6d45aeb61b4bf818e12d4205f2466f8c4748f85f4fce0146d1c03d69d753f0ad"
+ dependencies = [
+  "memchr",
+  "ucd-trie",
+@@ -3424,9 +3533,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "pest_derive"
+-version = "2.9.0"
++version = "2.9.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b3a83744a5c8455b8b3e0dc5031362780a347c878bdd11584d1a8984228cc88d"
++checksum = "89cc5a242e25ed4e7704d0be240f2cfbe20a8c27e7e252d94835be93d92dc39f"
+ dependencies = [
+  "pest",
+  "pest_generator",
+@@ -3434,9 +3543,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "pest_generator"
+-version = "2.9.0"
++version = "2.9.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e0cd3451aa3de60d4b9a1e736885e4dea6b31617598026f12256ad566d63304a"
++checksum = "7abf21475cc3820fe4b2ca2dc2142902f67a02189f3b5b3a229f4febc01a43e5"
+ dependencies = [
+  "pest",
+  "pest_meta",
+@@ -3447,9 +3556,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "pest_meta"
+-version = "2.9.0"
++version = "2.9.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e04d3a0849e241d7dfce834c83b1c5edc8622009e8dd51a12ba1927c32f05496"
++checksum = "adba4db388f687393c18c51348d44a41d870ca9df71a2c98172ea3035dc6936e"
+ dependencies = [
+  "pest",
+ ]
+@@ -3492,7 +3601,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "3c80231409c20246a13fddb31776fb942c38553c51e871f8cbd687a4cfb5843d"
+ dependencies = [
+  "phf_shared",
+- "rand 0.8.7",
++ "rand 0.8.8",
+ ]
+ 
+ [[package]]
+@@ -3565,9 +3674,9 @@ checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
+ 
+ [[package]]
+ name = "portable-atomic-util"
+-version = "0.2.7"
++version = "0.2.8"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c2a106d1259c23fac8e543272398ae0e3c0b8d33c88ed73d0cc71b0f1d902618"
++checksum = "10ab3eb7f3becc3a1cbc4f2c6f20267996cfc1a6467a873763411b136a122715"
+ dependencies = [
+  "portable-atomic",
+ ]
+@@ -3780,9 +3889,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+ 
+ [[package]]
+ name = "rand"
+-version = "0.8.7"
++version = "0.8.8"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a"
++checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
+ dependencies = [
+  "rand_core 0.6.4",
+ ]
+@@ -3886,7 +3995,7 @@ dependencies = [
+  "hashbrown 0.17.1",
+  "itertools 0.14.0",
+  "kasuari",
+- "lru 0.18.2",
++ "lru 0.18.4",
+  "palette",
+  "serde",
+  "strum",
+@@ -4016,7 +4125,7 @@ checksum = "92ecd8964f8453721699a1ed72037b0db49ce2f5a5138486ee89bed6f67cdf3a"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -4079,17 +4188,17 @@ checksum = "2da316a15f47e3d053de9cb2c439650bd8fa4aaeb9365f2e5f27f492ff73c196"
+ dependencies = [
+  "libc",
+  "rtoolbox",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+ name = "rtoolbox"
+-version = "0.0.5"
++version = "0.0.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "50a0e551c1e27e1731aba276dbeaeac73f53c7cd34d1bda485d02bd1e0f36844"
++checksum = "9a1efe12a1469752d0e6ff5ebec0b6ef4924cc5c4c71046b0ec730040535819d"
+ dependencies = [
+  "libc",
+- "windows-sys 0.59.0",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -4111,7 +4220,7 @@ dependencies = [
+  "errno",
+  "libc",
+  "linux-raw-sys",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -4258,7 +4367,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -4322,7 +4431,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "446ba717509524cb3f22f17ecc096f10f4822d76ab5c0b9822c5f9c284e825f4"
+ dependencies = [
+  "cfg-if",
+- "cpufeatures 0.3.0",
++ "cpufeatures 0.3.1",
+  "digest 0.11.3",
+ ]
+ 
+@@ -4398,9 +4507,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+ 
+ [[package]]
+ name = "smallvec"
+-version = "1.15.2"
++version = "1.16.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
++checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
+ dependencies = [
+  "serde",
+ ]
+@@ -4418,7 +4527,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
+ dependencies = [
+  "libc",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -4499,9 +4608,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "syn"
+-version = "3.0.4"
++version = "3.0.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
++checksum = "12df2e0110f65b775f769bb17ef989067a1d931b2eb822bd4346631eeada89f9"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+@@ -4519,6 +4628,12 @@ dependencies = [
+  "syn 2.0.119",
+ ]
+ 
++[[package]]
++name = "target-features"
++version = "0.1.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c1bbb9f3c5c463a01705937a24fdabc5047929ac764b2d5b9cf681c1f5041ed5"
++
+ [[package]]
+ name = "tempfile"
+ version = "3.27.0"
+@@ -4529,7 +4644,7 @@ dependencies = [
+  "getrandom 0.4.3",
+  "once_cell",
+  "rustix",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -4542,7 +4657,7 @@ dependencies = [
+  "parking_lot",
+  "rustix",
+  "signal-hook",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -4552,7 +4667,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
+ dependencies = [
+  "rustix",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -4726,7 +4841,7 @@ checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -4787,9 +4902,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "tinyvec"
+-version = "1.12.0"
++version = "1.13.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "bb4ebadaa0af04fab11ae01eb5f9fdb5f9c5b875506e210e71c07873528baa7f"
++checksum = "4cf0ded5c4e56918d8f8a339e1bb67d038d3bc6d144ac407904015ba2e4cde9b"
+ dependencies = [
+  "tinyvec_macros",
+ ]
+@@ -4814,7 +4929,7 @@ dependencies = [
+  "signal-hook-registry",
+  "socket2",
+  "tokio-macros",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -4825,7 +4940,7 @@ checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+@@ -4846,9 +4961,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "toml"
+-version = "1.1.4+spec-1.1.0"
++version = "1.1.5+spec-1.1.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "3aace63f4bbcdfc2c965b059de67119c89c4017a70d633be6c104910f67056f5"
++checksum = "12c0ba9680044b4ce98d391a62094047eada0d64860b80166c39f4a6b5640785"
+ dependencies = [
+  "indexmap",
+  "serde_core",
+@@ -5079,9 +5194,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+ 
+ [[package]]
+ name = "uuid"
+-version = "1.24.1"
++version = "1.26.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
++checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
+ dependencies = [
+  "atomic",
+  "getrandom 0.4.3",
+@@ -5195,9 +5310,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "wasm-bindgen"
+-version = "0.2.127"
++version = "0.2.128"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1b70935747edd64d89de3efa29d73789b806c15798f8e7dca4d8ac356b50ce70"
++checksum = "aecb87a33d3b0c5e3b7aa46336eaf486cffafbd281b195e4c8b80d50df2351bf"
+ dependencies = [
+  "cfg-if",
+  "once_cell",
+@@ -5208,9 +5323,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "wasm-bindgen-macro"
+-version = "0.2.127"
++version = "0.2.128"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "77775f8f3f7217702089053b94958f8f54061a3f663417df76e19cbdcca29bc1"
++checksum = "a690d511e3c1a8b3a55e33511e3c2c00c78415cd23650f32b808627f5696b9ed"
+ dependencies = [
+  "quote",
+  "wasm-bindgen-macro-support",
+@@ -5218,22 +5333,22 @@ dependencies = [
+ 
+ [[package]]
+ name = "wasm-bindgen-macro-support"
+-version = "0.2.127"
++version = "0.2.128"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e11d33f857dc2fb11b8bc75aee111aa9cbeb12cd9f25efd3d4c2a3dd4e235284"
++checksum = "411e4887f0071ef2d2164a9d5fdf2d20efbef78fccd3a78b0c10a1dc5295e48a"
+ dependencies = [
+  "bumpalo",
+  "proc-macro2",
+  "quote",
+- "syn 2.0.119",
++ "syn 3.0.5",
+  "wasm-bindgen-shared",
+ ]
+ 
+ [[package]]
+ name = "wasm-bindgen-shared"
+-version = "0.2.127"
++version = "0.2.128"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7ef64dbcc55df09c7e5a46182d181c2cfa3e925f3da937ea764728b4bbb9dcbf"
++checksum = "81941cd78d0c92026c33e5e01312845a4cb1e9af3407f9134b100dd03144103e"
+ dependencies = [
+  "unicode-ident",
+ ]
+@@ -5258,9 +5373,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "web-sys"
+-version = "0.3.104"
++version = "0.3.105"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c435338968042f4f59a557f690a253676d47ce13ceb55d70100e7facf6620a30"
++checksum = "9fbddc4a036f00ec4f18c83445bd3115cb306a91da554919a099d9222fe4a7f8"
+ dependencies = [
+  "js-sys",
+  "wasm-bindgen",
+@@ -5373,7 +5488,7 @@ version = "0.1.11"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
+ dependencies = [
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -5441,15 +5556,6 @@ dependencies = [
+  "windows-link",
+ ]
+ 
+-[[package]]
+-name = "windows-sys"
+-version = "0.59.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
+-dependencies = [
+- "windows-targets",
+-]
+-
+ [[package]]
+ name = "windows-sys"
+ version = "0.61.2"
+@@ -5459,70 +5565,6 @@ dependencies = [
+  "windows-link",
+ ]
+ 
+-[[package]]
+-name = "windows-targets"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
+-dependencies = [
+- "windows_aarch64_gnullvm",
+- "windows_aarch64_msvc",
+- "windows_i686_gnu",
+- "windows_i686_gnullvm",
+- "windows_i686_msvc",
+- "windows_x86_64_gnu",
+- "windows_x86_64_gnullvm",
+- "windows_x86_64_msvc",
+-]
+-
+-[[package]]
+-name = "windows_aarch64_gnullvm"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
+-
+-[[package]]
+-name = "windows_aarch64_msvc"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
+-
+-[[package]]
+-name = "windows_i686_gnu"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
+-
+-[[package]]
+-name = "windows_i686_gnullvm"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
+-
+-[[package]]
+-name = "windows_i686_msvc"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
+-
+-[[package]]
+-name = "windows_x86_64_gnu"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
+-
+-[[package]]
+-name = "windows_x86_64_gnullvm"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
+-
+-[[package]]
+-name = "windows_x86_64_msvc"
+-version = "0.52.6"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+-
+ [[package]]
+ name = "winnow"
+ version = "1.0.4"
+@@ -5539,7 +5581,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10"
+ dependencies = [
+  "cfg-if",
+- "windows-sys 0.61.2",
++ "windows-sys",
+ ]
+ 
+ [[package]]
+@@ -5637,9 +5679,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "zerovec"
+-version = "0.11.7"
++version = "0.11.8"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "94b5c6b5976d66c1d703c4fd17d3f5e43c8cedaacf604961b171adc7130896d8"
++checksum = "bb0464e17806c1d976d5cba29399c7f08e516e279e2ba493f63123b5fca67dd8"
+ dependencies = [
+  "yoke",
+  "zerofrom",
+@@ -5648,13 +5690,13 @@ dependencies = [
+ 
+ [[package]]
+ name = "zerovec-derive"
+-version = "0.11.5"
++version = "0.11.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9f212a141d820099d57ffafb9569be9617a6f27d3dc881fbee8fb56642f917a9"
++checksum = "34df6fc39dbd26ddc9c10e6a2984476e13acce22e64e4487636ef494369225da"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 3.0.4",
++ "syn 3.0.5",
+ ]
+ 
+ [[package]]
+diff --git a/Cargo.toml b/Cargo.toml
+index 58d111527..e894eec86 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -61,13 +61,13 @@ etcetera = "0.11.0"
+ eyre = "0.6"
+ futures = "0.3.32"
+ gix = { version = "0.87.1", default-features = false, features = [
+-    "attributes",
+     "blob-diff",
+     "index",
+     "max-performance-safe",
+     "sha1",
+     "sha256",
+ ] }
++gix-attributes = "0.33.1"
+ gix-ignore = { version = "0.22.1" }
+ globset = "0.4.18"
+ hashbrown = { version = "0.17.1", default-features = false, features = ["inline-more"] }
+diff --git a/lib/Cargo.toml b/lib/Cargo.toml
+index 02e85f85c..e99b6c0dc 100644
+--- a/lib/Cargo.toml
++++ b/lib/Cargo.toml
+@@ -36,6 +36,7 @@ either = { workspace = true }
+ etcetera = { workspace = true }
+ futures = { workspace = true }
+ gix = { workspace = true, optional = true }
++gix-attributes = { workspace = true }
+ gix-ignore = { workspace = true }
+ globset = { workspace = true }
+ indexmap = { workspace = true }
+diff --git a/lib/src/gitattributes.rs b/lib/src/gitattributes.rs
+new file mode 100644
+index 000000000..1d001138d
+--- /dev/null
++++ b/lib/src/gitattributes.rs
+@@ -0,0 +1,711 @@
++// Copyright 2025 The Jujutsu Authors
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// https://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#![expect(missing_docs)]
++#![allow(unused)]
++
++use std::collections::HashMap;
++use std::fs::File;
++use std::io::ErrorKind;
++use std::path::PathBuf;
++use std::pin::Pin;
++use std::sync::Arc;
++use std::sync::Mutex;
++
++use futures::AsyncRead;
++use futures::AsyncReadExt as _;
++use futures::io::AllowStdIo;
++use gix_attributes::Search;
++use gix_attributes::State;
++use gix_attributes::glob::pattern::Case;
++use gix_attributes::search::MetadataCollection;
++use gix_attributes::search::Outcome;
++use tokio::sync::OnceCell;
++
++use crate::backend::MergedTreeValueExt as _;
++use crate::backend::TreeValue;
++use crate::merge::SameChange;
++use crate::merged_tree::MergedTree;
++use crate::repo_path::RepoPath;
++use crate::repo_path::RepoPathBuf;
++use crate::repo_path::RepoPathComponent;
++
++/// Git Attributes instance
++///
++/// This struct handles accessing .gitattributes files
++/// and maintains a cache to prevent loading the same file twice.
++///
++/// It's lazy loaded so .gitattributes files are only accessed
++/// if you search for attributes for a given path.
++pub(crate) struct GitAttributes {
++    disk_file_loader: Arc<dyn FileLoader>,
++    store_file_loader: Arc<dyn FileLoader>,
++    node_cache: Mutex<HashMap<RepoPathBuf, Arc<GitAttributesNode>>>,
++}
++
++impl std::fmt::Debug for GitAttributes {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_struct("GitAttributes").finish()
++    }
++}
++
++#[async_trait::async_trait]
++pub(crate) trait FileLoader: Send + Sync {
++    /// Loads a file in a given `path`
++    ///
++    /// Returns Some(..) if the file was found and None if not
++    async fn load(
++        &self,
++        path: &RepoPath,
++    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, GitAttributesError>;
++}
++
++pub(crate) struct TreeFileLoader {
++    tree: MergedTree,
++}
++impl TreeFileLoader {
++    pub fn new(tree: MergedTree) -> Self {
++        Self { tree }
++    }
++}
++
++#[async_trait::async_trait]
++impl FileLoader for TreeFileLoader {
++    async fn load(
++        &self,
++        path: &RepoPath,
++    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, GitAttributesError> {
++        let merged_tree_value =
++            self.tree
++                .path_value(path)
++                .await
++                .map_err(|err| GitAttributesError {
++                    message: "Could not retrieve the value from path".to_string(),
++                    source: err.into(),
++                })?;
++        let maybe_file_merge = merged_tree_value.to_file_merge();
++        // try to resolve the file
++        let id = match maybe_file_merge
++            .as_ref()
++            .and_then(|files| files.resolve_trivial(SameChange::Accept))
++        {
++            Some(Some(id)) => id,
++            Some(None) => return Ok(None),
++            None => {
++                // conflict path
++                let Some(id) = merged_tree_value.iter().find_map(|tree_value| {
++                    let Some(TreeValue::File { id, .. }) = tree_value else {
++                        return None;
++                    };
++                    Some(id)
++                }) else {
++                    return Ok(None);
++                };
++                id
++            }
++        };
++
++        let result =
++            self.tree
++                .store()
++                .read_file(path, id)
++                .await
++                .map_err(|err| GitAttributesError {
++                    message: "Could not retrieve the value from path".to_string(),
++                    source: err.into(),
++                })?;
++        Ok(Some(result))
++    }
++}
++
++pub(crate) struct DiskFileLoader {
++    repo_root: PathBuf,
++}
++
++impl DiskFileLoader {
++    pub fn new(repo_root: PathBuf) -> Self {
++        Self { repo_root }
++    }
++}
++
++#[async_trait::async_trait]
++impl FileLoader for DiskFileLoader {
++    async fn load(
++        &self,
++        path: &RepoPath,
++    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, GitAttributesError> {
++        let path = path
++            .to_fs_path(&self.repo_root)
++            .map_err(|err| GitAttributesError {
++                message: "Could not convert path into fs path".to_string(),
++                source: err.into(),
++            })?;
++
++        // we use std::fs::symlink_metadata to not follow symlinks to follow Git's
++        // behavior.
++        let metadata = match std::fs::symlink_metadata(&path) {
++            Ok(metadata) => metadata,
++            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
++            Err(err) => {
++                return Err(GitAttributesError {
++                    message: format!("Failed to obtain the file metadata of {}", path.display()),
++                    source: err.into(),
++                });
++            }
++        };
++        if !metadata.is_file() {
++            return Ok(None);
++        }
++
++        let file = match File::open(&path) {
++            Ok(file) => file,
++            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
++            Err(err) => {
++                return Err(GitAttributesError {
++                    message: format!("Failed to open the file at {}", path.display()),
++                    source: err.into(),
++                });
++            }
++        };
++        Ok(Some(Box::pin(AllowStdIo::new(file))))
++    }
++}
++
++struct SearchAndCollection {
++    search: Search,
++    collection: MetadataCollection,
++}
++
++struct GitAttributesNode {
++    disk_first: OnceCell<Arc<SearchAndCollection>>,
++    store_first: OnceCell<Arc<SearchAndCollection>>,
++    disk_file_loader: Arc<dyn FileLoader>,
++    store_file_loader: Arc<dyn FileLoader>,
++    parent: Option<Arc<GitAttributesNode>>,
++    path: RepoPathBuf,
++}
++
++impl GitAttributesNode {
++    async fn get_disk_first(&self) -> Result<Arc<SearchAndCollection>, GitAttributesError> {
++        self.primary_then_secondary(SearchPriority::Disk).await
++    }
++    async fn get_store_first(&self) -> Result<Arc<SearchAndCollection>, GitAttributesError> {
++        self.primary_then_secondary(SearchPriority::Store).await
++    }
++
++    fn store(&self, priority: SearchPriority) -> &OnceCell<Arc<SearchAndCollection>> {
++        match priority {
++            SearchPriority::Store => &self.store_first,
++            SearchPriority::Disk => &self.disk_first,
++        }
++    }
++
++    fn primary_loader(&self, priority: SearchPriority) -> &Arc<dyn FileLoader> {
++        match priority {
++            SearchPriority::Store => &self.store_file_loader,
++            SearchPriority::Disk => &self.disk_file_loader,
++        }
++    }
++
++    fn secondary_loader(&self, priority: SearchPriority) -> &Arc<dyn FileLoader> {
++        match priority {
++            SearchPriority::Store => &self.disk_file_loader,
++            SearchPriority::Disk => &self.store_file_loader,
++        }
++    }
++
++    async fn primary_then_secondary(
++        &self,
++        priority: SearchPriority,
++    ) -> Result<Arc<SearchAndCollection>, GitAttributesError> {
++        // we use pin because this is a recursive call
++        self.store(priority)
++            .get_or_try_init(async || {
++                let parent_metadata = match &self.parent {
++                    Some(parent) => Box::pin(parent.primary_then_secondary(priority)).await?,
++                    None => {
++                        let mut search = Search::default();
++                        let mut collection = MetadataCollection::default();
++                        // initialize search
++                        search.add_patterns_buffer(
++                            b"[attr]binary -diff -merge -text",
++                            "[builtin]".into(),
++                            None,
++                            &mut collection,
++                            true, /* allow macros */
++                        );
++                        Arc::new(SearchAndCollection { search, collection })
++                    }
++                };
++                let git_attributes_path =
++                    self.path
++                        .join(RepoPathComponent::new(".gitattributes").map_err(|err| {
++                            GitAttributesError {
++                                message: "Could not join path with .gitattributes".to_string(),
++                                source: err.into(),
++                            }
++                        })?);
++                let mut async_reader = match self
++                    .primary_loader(priority)
++                    .load(&git_attributes_path)
++                    .await?
++                {
++                    Some(reader) => reader,
++                    None => {
++                        // fallback to the secondary loader
++                        match self
++                            .secondary_loader(priority)
++                            .load(&git_attributes_path)
++                            .await?
++                        {
++                            Some(reader) => reader,
++                            None => return Ok(parent_metadata),
++                        }
++                    }
++                };
++                let mut bytes = Vec::new();
++                async_reader
++                    .read_to_end(&mut bytes)
++                    .await
++                    .map_err(|err| GitAttributesError {
++                        source: err.into(),
++                        message: "Could not read .gitattributes file".into(),
++                    })?;
++                let mut search = parent_metadata.search.clone();
++                let mut collection = parent_metadata.collection.clone();
++
++                search.add_patterns_buffer(
++                    &bytes,
++                    git_attributes_path
++                        .to_fs_path(&PathBuf::new())
++                        .map_err(|err| GitAttributesError {
++                            message: "Could not convert gitattributes path into PathBuf"
++                                .to_string(),
++                            source: err.into(),
++                        })?,
++                    Some(&PathBuf::new()),
++                    &mut collection,
++                    // Macros can only be defined in top-level gitattributes:
++                    // https://git-scm.com/docs/gitattributes#_defining_macro_attributes
++                    self.parent.is_none(), /* allow macros */
++                );
++
++                Ok(Arc::new(SearchAndCollection { search, collection }))
++            })
++            .await
++            .cloned()
++    }
++}
++
++#[derive(Clone, Copy)]
++pub(crate) enum SearchPriority {
++    Store,
++    Disk,
++}
++
++impl GitAttributes {
++    /// Creates a new instance by receiving a Store File Loader, a Disk File
++    /// Loader and a list of filters to be ignored.
++    pub fn new(
++        store_file_loader: impl FileLoader + 'static,
++        disk_file_loader: impl FileLoader + 'static,
++    ) -> Self {
++        Self {
++            store_file_loader: Arc::new(store_file_loader),
++            disk_file_loader: Arc::new(disk_file_loader),
++            node_cache: Default::default(),
++        }
++    }
++
++    pub(crate) async fn search(
++        &self,
++        path: &RepoPath,
++        attribute_names: impl AsRef<[&str]>,
++        priority: SearchPriority,
++    ) -> Result<HashMap<String, State>, GitAttributesError> {
++        let attributes = self.get_git_attributes_node(path);
++        let store = match priority {
++            SearchPriority::Store => attributes.get_store_first().await?,
++            SearchPriority::Disk => attributes.get_disk_first().await?,
++        };
++        let SearchAndCollection { search, collection } = &*store;
++
++        let mut out = Outcome::default();
++        out.initialize_with_selection(
++            collection,
++            // From<&str> is implemented for KStringRef
++            attribute_names.as_ref().iter().copied(),
++        );
++        search.pattern_matching_relative_path(
++            path.as_internal_file_string().into(),
++            Case::Sensitive,
++            None,
++            &mut out,
++        );
++
++        let mut map = out
++            .iter_selected()
++            .map(|attr| {
++                let val = attr.assignment.to_owned();
++                (val.name.as_str().to_string(), val.state)
++            })
++            .collect::<HashMap<String, State>>();
++
++        // go over attributes and mark as unspecified if not set
++        for attribute_name in attribute_names.as_ref() {
++            map.entry(attribute_name.to_string())
++                .or_insert(State::Unspecified);
++        }
++
++        Ok(map)
++    }
++
++    fn get_git_attributes_node(&self, path: &RepoPath) -> Arc<GitAttributesNode> {
++        let path = path.parent().unwrap_or(RepoPath::root());
++        let mut val = self.node_cache.lock().expect("Not be poisoned");
++        self.inner(&mut val, path)
++    }
++
++    fn inner(
++        &self,
++        map: &mut HashMap<RepoPathBuf, Arc<GitAttributesNode>>,
++        path: &RepoPath,
++    ) -> Arc<GitAttributesNode> {
++        if let Some(node) = map.get(path) {
++            return node.clone();
++        }
++        let parent = path.parent().map(|parent| self.inner(map, parent));
++        let new_node = Arc::new(GitAttributesNode {
++            disk_first: OnceCell::new(),
++            store_first: OnceCell::new(),
++            disk_file_loader: self.disk_file_loader.clone(),
++            store_file_loader: self.store_file_loader.clone(),
++            parent,
++            path: path.to_owned(),
++        });
++        map.insert(path.to_owned(), new_node.clone());
++        new_node
++    }
++}
++
++/// Errors for GitAttributes
++#[derive(Debug, thiserror::Error)]
++#[error("{message}")]
++pub struct GitAttributesError {
++    message: String,
++    #[source]
++    source: Box<dyn std::error::Error + Send + Sync>,
++}
++
++#[cfg(test)]
++mod tests {
++
++    use futures::io::Cursor;
++    use gix_attributes::state::Value;
++    use indoc::indoc;
++    use pollster::FutureExt as _;
++
++    use super::*;
++
++    type TestStore = HashMap<RepoPathBuf, Result<String, String>>;
++
++    #[async_trait::async_trait]
++    impl FileLoader for TestStore {
++        async fn load(
++            &self,
++            path: &RepoPath,
++        ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, GitAttributesError> {
++            let Some(mocked_result) = self.get(path) else {
++                return Ok(None);
++            };
++            let data = mocked_result.clone();
++            match data {
++                Ok(data) => Ok(Some(Box::pin(Cursor::new(Vec::from(data))))),
++                Err(message) => Err(GitAttributesError {
++                    message: message.clone(),
++                    source: message.into(),
++                }),
++            }
++        }
++    }
++
++    fn repo_path(path: &str) -> &RepoPath {
++        RepoPath::from_internal_string(path).unwrap()
++    }
++
++    fn create_git_attributes(files: &[(&'static str, &'static str)]) -> GitAttributes {
++        let data: TestStore = files
++            .iter()
++            .map(|(key, value)| (repo_path(key).to_owned(), Ok(value.to_string())))
++            .collect();
++
++        GitAttributes::new(HashMap::new(), data)
++    }
++
++    fn assert_search_output(
++        git_attributes: &GitAttributes,
++        file: &str,
++        attribute: &str,
++        expected: State,
++    ) {
++        assert_search_output_with_priority(
++            git_attributes,
++            file,
++            attribute,
++            expected,
++            SearchPriority::Disk,
++        );
++    }
++
++    fn assert_search_output_with_priority(
++        git_attributes: &GitAttributes,
++        file: &str,
++        attribute: &str,
++        expected: State,
++        search: SearchPriority,
++    ) {
++        let map = git_attributes
++            .search(repo_path(file), &[attribute], search)
++            .block_on()
++            .unwrap();
++        assert_eq!(map.len(), 1);
++        assert_eq!(*map.get(attribute).unwrap(), expected);
++    }
++
++    fn assert_attribute_output(
++        git_attributes_content: &'static str,
++        file: &str,
++        attribute: &str,
++        expected: State,
++    ) {
++        let git_attributes = create_git_attributes(&[(".gitattributes", git_attributes_content)]);
++        assert_search_output(&git_attributes, file, attribute, expected);
++    }
++
++    #[test]
++    fn test_search_state_set() {
++        assert_attribute_output("abc foo", "abc", "foo", State::Set);
++    }
++
++    #[test]
++    fn test_search_state_eol_lf() {
++        assert_attribute_output("foo eol=lf", "foo", "eol", State::Value(Value::from("lf")));
++    }
++
++    #[test]
++    fn test_search_unset() {
++        assert_attribute_output("foo -text", "foo", "text", State::Unset);
++    }
++
++    #[test]
++    fn test_search_unspecified() {
++        assert_attribute_output("foo !text", "foo", "text", State::Unspecified);
++    }
++
++    #[test]
++    fn test_search_unspecified_no_pattern() {
++        assert_attribute_output("foo elo=lf", "bar", "text", State::Unspecified);
++        assert_attribute_output("foo elo=lf", "bar", "elo", State::Unspecified);
++    }
++
++    #[test]
++    fn test_path_and_pattern_matching() {
++        // Using https://git-scm.com/docs/gitattributes#_examples as example
++        // It's not 1:1 because we don't support $GIT_DIR/info/.gitattributes
++        // that would override in-tree settings.
++        let git_attributes = create_git_attributes(&[
++            (".gitattributes", "abc	foo bar baz"),
++            (
++                "t/.gitattributes",
++                indoc! {"
++                    ab*	merge=filfre
++                    abc	-foo -bar
++                    *.c	frotz
++                "},
++            ),
++        ]);
++
++        assert_search_output(&git_attributes, "t/abc", "foo", State::Unset);
++        assert_search_output(&git_attributes, "t/abc", "bar", State::Unset);
++        assert_search_output(&git_attributes, "t/abc", "baz", State::Set);
++        assert_search_output(
++            &git_attributes,
++            "t/abc",
++            "merge",
++            State::Value(Value::from("filfre")),
++        );
++        assert_search_output(&git_attributes, "t/abc", "frotz", State::Unspecified);
++    }
++
++    #[test]
++    fn test_glob_matching() {
++        assert_attribute_output("*.txt text", "bar.txt", "text", State::Set);
++        assert_attribute_output("foo/ text", "foo/bar.txt", "text", State::Unspecified);
++        assert_attribute_output("**/bar.rs text", "baz/bar.rs", "text", State::Set);
++    }
++
++    #[test]
++    fn test_case_sensitive_attr() {
++        assert_attribute_output(
++            indoc! {"
++                foo text
++                FOO -text
++            "},
++            "foo",
++            "text",
++            State::Set,
++        );
++        assert_attribute_output(
++            indoc! {"
++                foo text
++                FOO -text
++            "},
++            "FOO",
++            "text",
++            State::Unset,
++        );
++    }
++
++    #[test]
++    fn test_subdirectory_override() {
++        let git_attributes = create_git_attributes(&[
++            (".gitattributes", "abc	!baz"),
++            ("t/.gitattributes", "abc baz"),
++        ]);
++        assert_search_output(&git_attributes, "t/abc", "baz", State::Set);
++    }
++
++    #[test]
++    fn test_subdirectory_root_match() {
++        assert_attribute_output("baz/foo text", "baz/foo", "text", State::Set);
++    }
++
++    #[test]
++    fn test_directory_shouldnt_match() {
++        assert_attribute_output("foo text", "foo/bar.txt", "text", State::Unspecified);
++    }
++
++    #[test]
++    fn test_subdirectory_attribute() {
++        let git_attributes = create_git_attributes(&[("foo/.gitattributes", "bar.txt text")]);
++        assert_search_output(&git_attributes, "foo/bar.txt", "text", State::Set);
++    }
++
++    #[test]
++    fn test_macro_definition() {
++        let git_attributes = create_git_attributes(&[
++            (
++                ".gitattributes",
++                indoc! {"
++                    [attr]base_macro a
++                    [attr]override_macro b
++                "},
++            ),
++            (
++                "foo1/.gitattributes",
++                indoc! {"
++                    # this macro definition shouldn't take effect.
++                    [attr]override_macro c
++                    # this macro definition shouldn't take effect.
++                    [attr]new_macro e
++                    bar base_macro override_macro new_macro
++                "},
++            ),
++            (
++                "foo2/.gitattributes",
++                indoc! {"
++                    # this macro definition shouldn't take effect.
++                    [attr]override_macro d
++                    # this macro definition shouldn't take effect.
++                    [attr]new_macro e
++                    bar base_macro override_macro new_macro
++                "},
++            ),
++        ]);
++        assert_search_output(&git_attributes, "foo1/bar", "a", State::Set);
++        assert_search_output(&git_attributes, "foo1/bar", "b", State::Set);
++        assert_search_output(&git_attributes, "foo1/bar", "c", State::Unspecified);
++        assert_search_output(&git_attributes, "foo1/bar", "d", State::Unspecified);
++        assert_search_output(&git_attributes, "foo1/bar", "e", State::Unspecified);
++        assert_search_output(&git_attributes, "foo1/bar", "new_macro", State::Set);
++
++        assert_search_output(&git_attributes, "foo2/bar", "a", State::Set);
++        assert_search_output(&git_attributes, "foo2/bar", "b", State::Set);
++        assert_search_output(&git_attributes, "foo2/bar", "c", State::Unspecified);
++        assert_search_output(&git_attributes, "foo2/bar", "d", State::Unspecified);
++        assert_search_output(&git_attributes, "foo2/bar", "e", State::Unspecified);
++        assert_search_output(&git_attributes, "foo2/bar", "new_macro", State::Set);
++    }
++
++    #[test]
++    fn test_search_priority_and_fallback() {
++        let disk = TestStore::from([(
++            repo_path("foo/.gitattributes").to_owned(),
++            Ok("*.txt text".to_string()),
++        )]);
++
++        let store = TestStore::from([(
++            repo_path("bar/.gitattributes").to_owned(),
++            Ok("*.txt text".to_string()),
++        )]);
++
++        let git_attributes = GitAttributes::new(store, disk);
++        assert_search_output_with_priority(
++            &git_attributes,
++            "foo/bar.txt",
++            "text",
++            State::Set,
++            SearchPriority::Disk,
++        );
++        assert_search_output_with_priority(
++            &git_attributes,
++            "foo/bar.txt",
++            "text",
++            State::Set,
++            SearchPriority::Store,
++        );
++        assert_search_output_with_priority(
++            &git_attributes,
++            "bar/bar.txt",
++            "text",
++            State::Set,
++            SearchPriority::Store,
++        );
++        assert_search_output_with_priority(
++            &git_attributes,
++            "bar/bar.txt",
++            "text",
++            State::Set,
++            SearchPriority::Disk,
++        );
++    }
++
++    #[test]
++    fn test_file_loader_io_error() {
++        let store: TestStore = TestStore::from([(
++            repo_path(".gitattributes").to_owned(),
++            Err("There was an IO error".to_string()),
++        )]);
++
++        let git_attributes = GitAttributes::new(store, HashMap::new());
++        let result = &git_attributes
++            .search(repo_path("foo/bar.txt"), &["text"], SearchPriority::Disk)
++            .block_on();
++        assert!(result.is_err());
++        assert_eq!(
++            &result.as_ref().unwrap_err().message,
++            "There was an IO error",
++        );
++    }
++}
+diff --git a/lib/src/lib.rs b/lib/src/lib.rs
+index 7cb816018..ca58f037f 100644
+--- a/lib/src/lib.rs
++++ b/lib/src/lib.rs
+@@ -55,6 +55,7 @@ pub mod git;
+ pub mod git_backend;
+ #[cfg(feature = "git")]
+ mod git_subprocess;
++pub mod gitattributes;
+ pub mod gitignore;
+ pub mod gpg_signing;
+ pub use jj_core::graph;
+-- 
+2.53.0
+

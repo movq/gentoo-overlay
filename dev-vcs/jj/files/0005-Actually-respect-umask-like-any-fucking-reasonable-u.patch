@@ -1,0 +1,96 @@
+From f15c549bbd4f15a83de059f13b3b6862aea06bf0 Mon Sep 17 00:00:00 2001
+From: Mike Jones <mike@mjones.org>
+Date: Tue, 8 Sep 2026 18:59:45 +0100
+Subject: [PATCH 5/5] Actually respect umask like any fucking reasonable unix
+ program would
+
+---
+ lib/src/local_working_copy.rs | 33 ++++++++++++---------------------
+ 1 file changed, 12 insertions(+), 21 deletions(-)
+
+diff --git a/lib/src/local_working_copy.rs b/lib/src/local_working_copy.rs
+index cc808b0d4..e8f0dab12 100644
+--- a/lib/src/local_working_copy.rs
++++ b/lib/src/local_working_copy.rs
+@@ -32,6 +32,8 @@ use std::iter;
+ use std::mem;
+ use std::ops::Range;
+ #[cfg(unix)]
++use std::os::unix::fs::OpenOptionsExt as _;
++#[cfg(unix)]
+ use std::os::unix::fs::PermissionsExt as _;
+ use std::path::Path;
+ use std::path::PathBuf;
+@@ -270,19 +272,18 @@ impl ExecBit {
+     }
+ }
+ 
+-/// Set the executable bit of a file on-disk. This is a no-op on Windows.
+-///
+-/// On Unix, we manually set the executable bit to the previous value on-disk.
+-/// This is necessary because we write all files by creating them new, so files
+-/// won't preserve their permissions naturally.
++/// Create a file with the requested executable bit, respecting the process umask
++/// and inherited ACLs on Unix.
+ #[cfg_attr(windows, expect(unused_variables))]
+-fn set_executable(exec_bit: ExecBit, disk_path: &Path) -> Result<(), io::Error> {
++fn create_new_file(disk_path: &Path, exec_bit: ExecBit) -> Result<File, io::Error> {
++    let mut options = OpenOptions::new();
++    // Don't overwrite un-ignored file. Don't follow symlink.
++    options.write(true).create_new(true);
+     #[cfg(unix)]
+     {
+-        let mode = if exec_bit.0 { 0o755 } else { 0o644 };
+-        fs::set_permissions(disk_path, fs::Permissions::from_mode(mode))?;
++        options.mode(if exec_bit.0 { 0o777 } else { 0o666 });
+     }
+-    Ok(())
++    options.open(disk_path)
+ }
+ 
+ #[derive(Debug, PartialEq, Eq, Clone)]
+@@ -2103,10 +2104,7 @@ impl TreeState {
+         exec_bit: ExecBit,
+         apply_eol_conversion: bool,
+     ) -> Result<FileState, CheckoutError> {
+-        let mut file = File::options()
+-            .write(true)
+-            .create_new(true) // Don't overwrite un-ignored file. Don't follow symlink.
+-            .open(disk_path)
++        let mut file = create_new_file(disk_path, exec_bit)
+             .map_err(|err| CheckoutError::Other {
+                 message: format!("Failed to open file {} for writing", disk_path.display()),
+                 err: err.into(),
+@@ -2131,8 +2129,6 @@ impl TreeState {
+                 ),
+                 err: err.into(),
+             })?;
+-        set_executable(exec_bit, disk_path)
+-            .map_err(|err| checkout_error_for_stat_error(err, disk_path))?;
+         // Read the file state from the file descriptor. That way, know that the file
+         // exists and is of the expected type, and the stat information is most likely
+         // accurate, except for other processes modifying the file concurrently (The
+@@ -2195,10 +2191,7 @@ impl TreeState {
+                 message: "Failed to convert the EOL when writing a merge conflict".to_string(),
+                 err: err.into(),
+             })?;
+-        let mut file = OpenOptions::new()
+-            .write(true)
+-            .create_new(true) // Don't overwrite un-ignored file. Don't follow symlink.
+-            .open(disk_path)
++        let mut file = create_new_file(disk_path, exec_bit)
+             .map_err(|err| CheckoutError::Other {
+                 message: format!("Failed to open file {} for writing", disk_path.display()),
+                 err: err.into(),
+@@ -2209,8 +2202,6 @@ impl TreeState {
+                 message: format!("Failed to write conflict to file {}", disk_path.display()),
+                 err: err.into(),
+             })? as u64;
+-        set_executable(exec_bit, disk_path)
+-            .map_err(|err| checkout_error_for_stat_error(err, disk_path))?;
+         let metadata = file
+             .metadata()
+             .map_err(|err| checkout_error_for_stat_error(err, disk_path))?;
+-- 
+2.53.0
+
