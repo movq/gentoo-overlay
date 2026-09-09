@@ -131,7 +131,7 @@ RUST_MIN_VER="1.85.0"
 
 PYTHON_COMPAT=( python3_{11..14} )
 
-inherit cargo cmake python-any-r1 readme.gentoo-r1 xdg
+inherit cargo cmake python-any-r1 xdg
 
 DESCRIPTION="Friendly Interactive SHell"
 HOMEPAGE="https://fishshell.com/"
