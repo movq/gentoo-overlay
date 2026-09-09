@@ -689,7 +689,7 @@ DESCRIPTION="Matrix Authentication Service"
 HOMEPAGE="https://element-hq.github.io/matrix-authentication-service/"
 SRC_URI="
 	https://github.com/element-hq/${PN}/archive/refs/tags/v${PV}.tar.gz -> ${P}-gh.tar.gz
-	http://127.0.0.1/${P}-vendor.tar.gz
+	https://git.mjones.io/cgit/mirrors/matrix-authentication-service-vendor/snapshot/matrix-authentication-service-vendor-${PV}.tar.xz
 	${CARGO_CRATE_URIS}
 "
 
