@@ -6,10 +6,11 @@ EAPI=8
 DESCRIPTION="Linux initramfs generator"
 
 HOMEPAGE="https://git.mjones.io/mike/tinyramfs"
+_commit=29929f3d13f0340a842c196e10dc839ad52dd7f0
 
-SRC_URI="https://git.mjones.io/mike/tinyramfs/archive/29929f3d13f0340a842c196e10dc839ad52dd7f0.tar.gz -> tinyramfs-0.3.0-mike.tar.gz"
+SRC_URI="https://git.mjones.io/cgit/mike/tinyramfs/snapshot/tinyramfs-${_commit}.tar.xz -> tinyramfs-0.3.0-mike.tar.xz"
 
-S="${WORKDIR}/${PN}"
+S="${WORKDIR}/${PN}-${_commit}"
 
 LICENSE="GPL-3"
 
