@@ -714,8 +714,8 @@ RDEPEND="
 src_prepare() {
 	default
 
-	mv "${WORKDIR}/node_modules" .
-	mv "${WORKDIR}/frontend/node_modules" frontend
+	mv "${WORKDIR}/${PN}-vendor-${PV}/node_modules" . || die
+	mv "${WORKDIR}/${PN}-vendor-${PV}/frontend/node_modules" frontend || die
 }
 
 src_compile() {
