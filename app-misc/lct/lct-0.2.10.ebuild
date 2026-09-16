@@ -11,8 +11,6 @@ HOMEPAGE="https://git.mjones.io/mike/lct"
 
 SRC_URI="https://git.mjones.io/cgit/mike/lct/snapshot/lct-${PV}.tar.xz"
 
-S="${WORKDIR}/${PN}"
-
 LICENSE="GPL-3"
 
 SLOT="0"
