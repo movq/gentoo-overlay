@@ -300,7 +300,11 @@ multilib_src_configure() {
 		pushd ${INTROSPECTION_SOURCE_DIR} || die
 
 		meson_src_configure
-		meson_src_compile
+		if tc-is-cross-compiler ; then
+			CC="$(tc-getCC)" meson_src_compile
+		else
+			meson_src_compile
+		fi
 		# We already provide a prefix in ${T} above. Blank DESTDIR
 		# as it may be set in the environment by Portage (though not
 		# guaranteed in src_configure).
