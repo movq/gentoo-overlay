@@ -1,0 +1,6 @@
+# Directory to serve the EFS files from. If unset, they are served from the
+# modemst1/modemst2/fsg/fsc partitions instead.
+#rmtfs_files_path="/var/lib/rmtfs"
+
+# Avoid writing to storage
+rmtfs_avoid_writing="true"

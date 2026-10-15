@@ -1,0 +1,27 @@
+#!/sbin/openrc-run
+# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+name="rmtfs"
+description="Qualcomm remote file system service"
+
+supervisor=supervise-daemon
+command="/usr/bin/rmtfs"
+# Start and stop the modem remoteproc together with rmtfs
+command_args="-s"
+# https://github.com/linux-msm/rmtfs/commit/dfb8f3ed1c8fbde621cd08aaf9e7724a4c55cbd1
+respawn_delay=1
+
+if [ -z "${rmtfs_files_path}" ]; then
+	command_args="${command_args} -P"
+else
+	command_args="${command_args} -o ${rmtfs_files_path}"
+fi
+if [ "${rmtfs_avoid_writing}" = "true" ]; then
+	command_args="${command_args} -r"
+fi
+
+depend() {
+	after udev-settle
+	before NetworkManager modemmanager ofono
+}

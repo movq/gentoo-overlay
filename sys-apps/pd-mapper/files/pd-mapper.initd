@@ -1,0 +1,9 @@
+#!/sbin/openrc-run
+# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+name="pd-mapper"
+description="Qualcomm PD mapper service"
+
+supervisor=supervise-daemon
+command="/usr/bin/pd-mapper"
