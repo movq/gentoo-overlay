@@ -246,11 +246,11 @@ multilib_src_configure() {
 	# Build internal copy of gobject-introspection to avoid circular dependency (built for native abi only)
 	if _need_bootstrap_gi ; then
 		einfo "Bootstrapping gobject-introspection..."
-		INTROSPECTION_BIN_DIR="${T}/bootstrap-gi-prefix/usr/bin"
-		INTROSPECTION_LIB_DIR="${T}/bootstrap-gi-prefix/usr/$(get_libdir)"
+		INTROSPECTION_BIN_DIR="${WORKDIR}/bootstrap-gi-prefix/usr/bin"
+		INTROSPECTION_LIB_DIR="${WORKDIR}/bootstrap-gi-prefix/usr/$(get_libdir)"
 
 		local emesonargs=(
-			--prefix="${T}/bootstrap-gi-prefix/usr"
+			--prefix="${WORKDIR}/bootstrap-gi-prefix/usr"
 			-Dpython="${EPYTHON}"
 			-Dbuild_introspection_data=true
 			# Build an internal copy of glib for the internal copy of gobject-introspection
@@ -325,7 +325,11 @@ multilib_src_configure() {
 		# (We also need to prepend our just-built one for later use of
 		# g-ir-scanner to use the new one and to help workaround bugs like
 		# bug #946221.)
-		local -x PKG_CONFIG_PATH="${PKG_CONFIG_LIBDIR}:$($(tc-getPKG_CONFIG) --variable pc_path pkg-config)"
+		if tc-is-cross-compiler ; then
+			local -x PKG_CONFIG_PATH="${INTROSPECTION_LIB_DIR}/pkgconfig"
+		else
+			local -x PKG_CONFIG_PATH="${PKG_CONFIG_LIBDIR}:$($(tc-getPKG_CONFIG) --variable pc_path pkg-config)"
+		fi
 
 		# Add the paths to the built glib libraries to the library path so that gobject-introspection can load them
 		local gliblib
