@@ -1,0 +1,12 @@
+diff --git a/xpcom/base/nsVersionComparator.h b/xpcom/base/nsVersionComparator.h
+index 1e16bcb..a5a19e3 100644
+--- a/xpcom/base/nsVersionComparator.h
++++ b/xpcom/base/nsVersionComparator.h
+@@ -9,6 +9,7 @@
+ #define nsVersionComparator_h_
+ 
+ #include <assert.h>
++#include <stdint.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #if defined(XP_WIN) && !defined(UPDATER_NO_STRING_GLUE_STL)
