@@ -8,7 +8,7 @@ HOMEPAGE="https://phosh.mobi/"
 
 LICENSE="metapackage"
 SLOT="0"
-KEYWORDS="~amd64"
+KEYWORDS="~amd64 ~arm64"
 IUSE="calls cups geolocation iio +screenshot systemd"
 
 # https://salsa.debian.org/DebianOnMobile-team/meta-phosh

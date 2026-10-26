@@ -218,7 +218,7 @@ LICENSE="GPL-3+"
 # Dependent crate licenses
 LICENSE+=" Apache-2.0 Apache-2.0-with-LLVM-exceptions MIT Unicode-3.0"
 SLOT="0"
-KEYWORDS="~amd64"
+KEYWORDS="~amd64 ~arm64"
 IUSE="man +rust"
 
 DEPEND="
